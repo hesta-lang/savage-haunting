@@ -2,7 +2,7 @@ import bpy
 import math
 from mathutils import Vector
 
-# Femgram: blockout based ONLY on the user's latest reference.
+# Femgram: blockout based ONLY on the newly approved 2026-10-31 reference.
 # Stylized furry rabbit, taller silhouette, thick thighs, slim/medium waist.
 
 def mat(name, color, roughness=0.82):
@@ -12,7 +12,7 @@ def mat(name, color, roughness=0.82):
     return m
 
 WHITE = mat("Fur - warm white", (0.91, 0.91, 0.89))
-BLACK = mat("Near black", (0.012, 0.012, 0.014))
+BLACK = mat("Glossy near black", (0.006, 0.006, 0.008), 0.16)
 GRAY = mat("Sweater charcoal gray", (0.22, 0.22, 0.23))
 MIDGRAY = mat("Sweater ribbing", (0.13, 0.13, 0.14))
 PALE = mat("Eye highlight", (0.98, 0.98, 0.96))
@@ -62,9 +62,11 @@ def build():
     uv("Head_Furry", (0,0,5.65), (0.92,0.72,0.91), WHITE, 32,24)
     uv("Muzzle", (0,-0.53,5.35), (0.52,0.27,0.31), WHITE)
     uv("Nose", (0,-0.79,5.42), (0.075,0.045,0.05), BLACK,16,12)
-    # One visible large black eye; fringe intentionally covers the other side.
-    uv("Visible_black_eye", (-0.42,-0.655,5.78), (0.29,0.105,0.35), BLACK)
-    uv("Eye_glint", (-0.51,-0.755,5.93), (0.055,0.025,0.07), PALE,16,12)
+    # Both large black eyes are visible in the new reference.
+    uv("Eye_L", (-0.42,-0.655,5.78), (0.30,0.105,0.27), BLACK)
+    uv("Eye_R", (0.42,-0.655,5.78), (0.30,0.105,0.27), BLACK)
+    uv("Eye_glint_L", (-0.51,-0.755,5.91), (0.045,0.025,0.055), PALE,16,12)
+    uv("Eye_glint_R", (0.33,-0.755,5.91), (0.045,0.025,0.055), PALE,16,12)
 
     # Long rabbit ears, slightly splayed, with black inner panels.
     earL = uv("Ear_L", (-0.53,0.02,6.72), (0.34,0.22,0.82), WHITE)
@@ -78,18 +80,21 @@ def build():
 
     # Fluffy hair cap and side locks / fringe.
     uv("Hair_cap", (0,-0.015,6.13), (0.94,0.76,0.49), WHITE)
-    uv("Fringe_main", (0.30,-0.58,5.91), (0.53,0.20,0.65), WHITE)
-    uv("Fringe_tip", (0.48,-0.60,5.48), (0.28,0.19,0.47), WHITE)
-    uv("Hair_lock_L", (-0.91,-0.10,5.26), (0.28,0.36,0.77), WHITE)
-    uv("Hair_lock_R", (0.91,-0.05,5.20), (0.28,0.36,0.73), WHITE)
-    # Back hair mass
-    uv("Back_hair", (0,0.39,5.35), (1.00,0.40,0.95), WHITE)
+    uv("Fringe_main", (0.18,-0.58,5.98), (0.62,0.20,0.48), WHITE)
+    uv("Fringe_tip", (0.38,-0.60,5.64), (0.30,0.19,0.34), WHITE)
+    # Long flowing hair falling behind and along both sides to hip level.
+    uv("Hair_lock_L", (-0.91,-0.10,4.20), (0.30,0.34,1.62), WHITE,32,24)
+    uv("Hair_lock_R", (0.91,-0.05,4.18), (0.30,0.34,1.66), WHITE,32,24)
+    uv("Back_hair", (0,0.39,4.62), (1.02,0.40,1.62), WHITE,32,24)
 
     # Neck and sweater torso: taller torso, moderate waist.
     uv("Neck", (0,0,4.77), (0.30,0.30,0.28), WHITE)
     uv("Sweater_body", (0,0.02,4.00), (0.72,0.48,0.88), GRAY)
     uv("Sweater_hem", (0,-0.005,3.34), (0.76,0.49,0.18), MIDGRAY)
-    uv("Folded_collar", (0,-0.01,4.70), (0.39,0.39,0.17), MIDGRAY)
+    uv("Folded_collar", (0,-0.015,4.48), (0.91,0.43,0.22), MIDGRAY)
+    uv("Upper_chest_panel", (0,-0.02,4.63), (0.53,0.40,0.20), GRAY)
+    curve_tube("Necklace_chain", [(-0.26,-0.39,4.78),(0,-0.49,4.52),(0.26,-0.39,4.78)], 0.018, PALE)
+    uv("Pendant", (0,-0.51,4.43), (0.09,0.045,0.12), PALE,16,12)
     # Ribbed collar/hem hints
     for z in (3.29,3.36,4.67):
         curve_tube("Rib_detail", [(-0.34,-0.39,z),(0,-0.48,z-0.015),(0.34,-0.39,z)], 0.018, GRAY)
@@ -113,7 +118,7 @@ def build():
 
     # Thick, rounded thighs; not a heavy/obese body.
     for side, label in [(-1,"L"),(1,"R")]:
-        uv("Thigh_"+label, (side*0.40,0.015,2.35), (0.43,0.43,0.80), WHITE,32,24)
+        uv("Thigh_"+label, (side*0.40,0.015,2.35), (0.53,0.47,0.86), WHITE,32,24)
         # Digitigrade lower leg: knee -> raised hock -> ankle.
         capsule("Shin_"+label, (side*0.42,0.02,1.82), (side*0.42,0.18,0.83), 0.22, WHITE)
         capsule("Hock_"+label, (side*0.42,0.18,0.83), (side*0.42,0.43,0.55), 0.19, WHITE)
