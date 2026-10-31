@@ -1,0 +1,35 @@
+name: Build Femgram Blender Model
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "model/**"
+      - ".github/workflows/build-model.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Blender
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender
+
+      - name: Generate editable model and FBX
+        run: |
+          mkdir -p dist
+          blender --background --python model/femgram_generator.py
+          cp /tmp/Femgram.blend dist/Femgram.blend
+          cp /tmp/Femgram.fbx dist/Femgram.fbx
+
+      - name: Upload model artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Femgram-3D-Source
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
