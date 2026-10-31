@@ -169,7 +169,7 @@ def build():
         if o.type in {'MESH','CURVE','ARMATURE'}:
             o.select_set(True)
     bpy.context.view_layer.objects.active = arm
-    bpy.context.scene.render.engine = 'BLENDER_EEVEE_NEXT'
+    bpy.context.scene.render.engine = 'BLENDER_EEVEE'
     bpy.context.scene.render.resolution_x = 900
     bpy.context.scene.render.resolution_y = 1200
     bpy.context.scene.render.resolution_percentage = 100
