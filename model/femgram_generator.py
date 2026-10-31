@@ -37,6 +37,62 @@ def capsule(name, a, b, radius, material, depth_scale=1.0):
     ob.rotation_quaternion = d.to_track_quat('Z','Y')
     return ob
 
+
+def loft_mesh(name, rings, material, segments=48):
+    """Smooth continuous organic surface from elliptical cross-sections.
+    Each ring: (z, center_x, center_y, radius_x, radius_y)."""
+    verts, faces = [], []
+    for z, cx, cy, rx, ry in rings:
+        for i in range(segments):
+            a = 2.0 * math.pi * i / segments
+            verts.append((cx + rx * math.cos(a), cy + ry * math.sin(a), z))
+    for r in range(len(rings)-1):
+        for i in range(segments):
+            a = r*segments+i
+            b = r*segments+(i+1)%segments
+            c = (r+1)*segments+(i+1)%segments
+            d = (r+1)*segments+i
+            faces.append((a,b,c,d))
+    faces.append(tuple(range(segments-1,-1,-1)))
+    off=(len(rings)-1)*segments
+    faces.append(tuple(off+i for i in range(segments)))
+    mesh=bpy.data.meshes.new(name+"_Mesh")
+    mesh.from_pydata(verts,[],faces)
+    mesh.materials.append(material)
+    mesh.update()
+    ob=bpy.data.objects.new(name,mesh)
+    bpy.context.collection.objects.link(ob)
+    for p in mesh.polygons: p.use_smooth=True
+    sub=ob.modifiers.new("Organic surface smoothing","SUBSURF")
+    sub.levels=2
+    sub.render_levels=2
+    return ob
+
+def leaf_ear(name, x, z, lean, material, inner=False):
+    # A tapered, curved ear shell built from a shaped mesh, not a sphere.
+    rows=24; cols=24; verts=[]; faces=[]
+    length=1.55 if not inner else 1.12
+    width=0.29 if not inner else 0.155
+    depth=0.105 if not inner else 0.035
+    for j in range(rows+1):
+        t=j/rows
+        center_x=x+lean*t
+        center_z=z+length*t
+        w=width*(math.sin(math.pi*(t*0.94+0.03))**0.72)
+        for i in range(cols):
+            a=2*math.pi*i/cols
+            verts.append((center_x+w*math.cos(a), -0.10+depth*math.sin(a), center_z))
+    for j in range(rows):
+        for i in range(cols):
+            a=j*cols+i; b=j*cols+(i+1)%cols
+            c=(j+1)*cols+(i+1)%cols; d=(j+1)*cols+i
+            faces.append((a,b,c,d))
+    me=bpy.data.meshes.new(name+"_Mesh"); me.from_pydata(verts,[],faces); me.materials.append(material); me.update()
+    ob=bpy.data.objects.new(name,me); bpy.context.collection.objects.link(ob)
+    for p in me.polygons: p.use_smooth=True
+    ob.modifiers.new("Ear smoothing","SUBSURF").levels=2
+    return ob
+
 def curve_tube(name, points, bevel, material):
     c = bpy.data.curves.new(name, 'CURVE')
     c.dimensions = '3D'
@@ -58,76 +114,95 @@ def build():
     bpy.ops.object.delete(use_global=False)
 
     # Character height approx 7.2 Blender units; front faces -Y.
-    # Head and muzzle
-    uv("Head_Furry", (0,0,5.65), (0.92,0.72,0.91), WHITE, 32,24)
-    uv("Muzzle", (0,-0.53,5.35), (0.52,0.27,0.31), WHITE)
+    # Head: one sculpted, tapered head volume with cheek and jaw transitions.
+    loft_mesh("Head_Sculpted", [
+        (4.92,0,0.02,0.28,0.34),(5.05,0,0.00,0.55,0.53),
+        (5.28,0,0.00,0.78,0.66),(5.58,0,0.02,0.91,0.73),
+        (5.88,0,0.04,0.94,0.73),(6.12,0,0.05,0.82,0.66),
+        (6.28,0,0.05,0.52,0.48),(6.34,0,0.05,0.08,0.10)
+    ], WHITE, 64)
+    # Muzzle/jaw are shaped mesh forms; only facial features remain separate.
+    loft_mesh("Muzzle_Sculpted", [
+        (5.17,0,-0.40,0.22,0.17),(5.22,0,-0.48,0.43,0.23),
+        (5.34,0,-0.51,0.57,0.27),(5.47,0,-0.48,0.43,0.23),
+        (5.52,0,-0.43,0.18,0.13)
+    ], WHITE, 48)
     uv("Nose", (0,-0.79,5.42), (0.075,0.045,0.05), BLACK,16,12)
-    # Both large black eyes are visible in the new reference.
     uv("Eye_L", (-0.42,-0.655,5.78), (0.30,0.105,0.27), BLACK)
     uv("Eye_R", (0.42,-0.655,5.78), (0.30,0.105,0.27), BLACK)
     uv("Eye_glint_L", (-0.51,-0.755,5.91), (0.045,0.025,0.055), PALE,16,12)
     uv("Eye_glint_R", (0.33,-0.755,5.91), (0.045,0.025,0.055), PALE,16,12)
 
-    # Long rabbit ears, slightly splayed, with black inner panels.
-    earL = uv("Ear_L", (-0.53,0.02,6.72), (0.34,0.22,0.82), WHITE)
-    earL.rotation_euler[1] = -0.22
-    innerL = uv("Ear_inner_L", (-0.54,-0.195,6.73), (0.19,0.055,0.58), BLACK)
-    innerL.rotation_euler[1] = -0.22
-    earR = uv("Ear_R", (0.52,0.02,6.78), (0.34,0.22,0.79), WHITE)
-    earR.rotation_euler[1] = 0.18
-    innerR = uv("Ear_inner_R", (0.52,-0.195,6.79), (0.19,0.055,0.55), BLACK)
-    innerR.rotation_euler[1] = 0.18
+    # Long tapered ears with continuous mesh shells and inner panels.
+    leaf_ear("Ear_L", -0.52, 6.00, -0.18, WHITE)
+    leaf_ear("Ear_R", 0.52, 6.02, 0.16, WHITE)
+    leaf_ear("Ear_inner_L", -0.52, 6.12, -0.18, BLACK, True)
+    leaf_ear("Ear_inner_R", 0.52, 6.14, 0.16, BLACK, True)
 
-    # Fluffy hair cap and side locks / fringe.
-    uv("Hair_cap", (0,-0.015,6.13), (0.94,0.76,0.49), WHITE)
-    uv("Fringe_main", (0.18,-0.58,5.98), (0.62,0.20,0.48), WHITE)
-    uv("Fringe_tip", (0.38,-0.60,5.64), (0.30,0.19,0.34), WHITE)
-    # Long flowing hair falling behind and along both sides to hip level.
-    uv("Hair_lock_L", (-0.91,-0.10,4.20), (0.30,0.34,1.62), WHITE,32,24)
-    uv("Hair_lock_R", (0.91,-0.05,4.18), (0.30,0.34,1.66), WHITE,32,24)
-    uv("Back_hair", (0,0.39,4.62), (1.02,0.40,1.62), WHITE,32,24)
+    
 
-    # Neck and sweater torso: taller torso, moderate waist.
-    uv("Neck", (0,0,4.77), (0.30,0.30,0.28), WHITE)
-    uv("Sweater_body", (0,0.02,4.00), (0.72,0.48,0.88), GRAY)
-    uv("Sweater_hem", (0,-0.005,3.34), (0.76,0.49,0.18), MIDGRAY)
-    uv("Folded_collar", (0,-0.015,4.48), (0.91,0.43,0.22), MIDGRAY)
-    uv("Upper_chest_panel", (0,-0.02,4.63), (0.53,0.40,0.20), GRAY)
+        # Hair cap and fringe use broad sculpted meshes rather than stacked balls.
+    loft_mesh("Hair_Cap", [
+        (5.85,0,0.00,0.72,0.57),(6.02,0,0.02,0.91,0.69),
+        (6.20,0,0.04,0.90,0.68),(6.36,0,0.05,0.68,0.53),
+        (6.43,0,0.05,0.15,0.15)
+    ], WHITE, 64)
+    loft_mesh("Fringe", [
+        (5.72,0.10,-0.48,0.35,0.14),(5.84,0.10,-0.50,0.63,0.17),
+        (6.00,0.02,-0.45,0.78,0.18),(6.13,0,-0.34,0.63,0.18),
+        (6.20,0,-0.20,0.28,0.12)
+    ], WHITE, 48)
+    # Long side locks and back hair: tapered flowing masses.
+    loft_mesh("Hair_Lock_L", [(2.95,-0.82,0.10,0.10,0.16),(3.25,-0.86,0.10,0.22,0.23),(4.0,-0.91,0.10,0.25,0.27),(4.8,-0.86,0.10,0.28,0.28),(5.65,-0.72,0.10,0.25,0.25)], WHITE)
+    loft_mesh("Hair_Lock_R", [(2.95,0.82,0.10,0.10,0.16),(3.25,0.86,0.10,0.22,0.23),(4.0,0.91,0.10,0.25,0.27),(4.8,0.86,0.10,0.28,0.28),(5.65,0.72,0.10,0.25,0.25)], WHITE)
+    loft_mesh("Back_Hair", [(2.95,0,0.42,0.15,0.18),(3.35,0,0.42,0.66,0.25),(4.1,0,0.42,0.92,0.30),(4.9,0,0.40,0.93,0.30),(5.75,0,0.30,0.72,0.25)], WHITE, 64)
+
+    
+
+        # Continuous neck/body silhouette; sweater is a fitted shaped shell.
+    loft_mesh("Neck", [(4.52,0,0.02,0.25,0.25),(4.75,0,0.02,0.27,0.27),(4.96,0,0.02,0.31,0.29)], WHITE)
+    loft_mesh("Body_Core", [(3.12,0,0.02,0.56,0.38),(3.32,0,0.02,0.67,0.44),(3.62,0,0.02,0.65,0.43),(3.95,0,0.02,0.69,0.45),(4.28,0,0.02,0.77,0.48),(4.52,0,0.02,0.63,0.42),(4.70,0,0.02,0.31,0.29)], WHITE, 64)
+    loft_mesh("Sweater_Body", [(3.28,0,0.02,0.70,0.48),(3.40,0,0.02,0.73,0.49),(3.72,0,0.02,0.70,0.48),(4.05,0,0.02,0.74,0.49),(4.34,0,0.02,0.80,0.50),(4.50,0,0.02,0.78,0.48)], GRAY, 64)
+    loft_mesh("Sweater_Collar", [(4.43,0,0.02,0.79,0.48),(4.50,0,0.02,0.84,0.49),(4.57,0,0.02,0.80,0.47)], MIDGRAY, 64)
+    loft_mesh("Sweater_Hem", [(3.25,0,0.02,0.74,0.49),(3.36,0,0.02,0.75,0.49)], MIDGRAY, 64)
     curve_tube("Necklace_chain", [(-0.26,-0.39,4.78),(0,-0.49,4.52),(0.26,-0.39,4.78)], 0.018, PALE)
     uv("Pendant", (0,-0.51,4.43), (0.09,0.045,0.12), PALE,16,12)
-    # Ribbed collar/hem hints
-    for z in (3.29,3.36,4.67):
-        curve_tube("Rib_detail", [(-0.34,-0.39,z),(0,-0.48,z-0.015),(0.34,-0.39,z)], 0.018, GRAY)
 
-    # Sleeves, wrists and paws.
+    
+
+        # Arms: tapered continuous mesh volumes, with small paw details.
     for side, label in [(-1,"L"),(1,"R")]:
-        capsule("Sleeve_"+label, (side*0.55,0,4.45), (side*1.00,-0.02,3.55), 0.31, GRAY, 1.05)
-        uv("Cuff_"+label, (side*1.00,-0.02,3.55), (0.29,0.30,0.15), MIDGRAY)
-        capsule("Forearm_fur_"+label, (side*1.00,-0.02,3.55), (side*1.12,-0.09,3.28), 0.17, WHITE)
-        uv("Rabbit_paw_"+label, (side*1.16,-0.17,3.23), (0.22,0.19,0.15), WHITE)
-        # subtle paw digits
+        loft_mesh("Sleeve_"+label, [(3.42,side*1.00,-0.01,0.20,0.22),(3.62,side*0.98,-0.01,0.25,0.26),(4.00,side*0.82,-0.01,0.27,0.28),(4.36,side*0.63,0.00,0.30,0.30),(4.52,side*0.54,0.00,0.27,0.27)], GRAY)
+        loft_mesh("Forearm_"+label, [(3.18,side*1.10,-0.05,0.13,0.15),(3.38,side*1.05,-0.05,0.17,0.17),(3.58,side*1.00,-0.03,0.18,0.18)], WHITE)
+        uv("Rabbit_paw_"+label, (side*1.13,-0.17,3.16), (0.19,0.16,0.13), WHITE)
         for j in range(2):
-            uv("Paw_digit_"+label+str(j), (side*(1.10+j*0.12),-0.31,3.20), (0.075,0.06,0.09), WHITE,16,12)
+            uv("Paw_digit_"+label+str(j), (side*(1.08+j*0.11),-0.29,3.13), (0.065,0.05,0.07), WHITE,16,12)
 
-    # Shorts with clear high-waist silhouette.
-    uv("Shorts", (0,0.015,2.94), (0.76,0.48,0.43), BLACK)
-    uv("Shorts_waistband", (0,-0.005,3.30), (0.78,0.49,0.14), MIDGRAY)
-    # Two light side stripes on front/outer side.
+    
+
+        loft_mesh("Shorts", [(2.68,0,0.02,0.60,0.43),(2.82,0,0.02,0.73,0.48),(3.05,0,0.02,0.76,0.49),(3.28,0,0.02,0.74,0.48)], BLACK, 64)
+    loft_mesh("Shorts_Waistband", [(3.22,0,0.02,0.76,0.49),(3.34,0,0.02,0.76,0.49)], MIDGRAY, 64)
     for side in (-1,1):
         curve_tube("Shorts_side_stripe", [(side*0.60,-0.40,3.17),(side*0.65,-0.43,2.95),(side*0.69,-0.37,2.73)], 0.018, PALE)
 
-    # Thick, rounded thighs; not a heavy/obese body.
-    for side, label in [(-1,"L"),(1,"R")]:
-        uv("Thigh_"+label, (side*0.40,0.015,2.35), (0.53,0.47,0.86), WHITE,32,24)
-        # Digitigrade lower leg: knee -> raised hock -> ankle.
-        capsule("Shin_"+label, (side*0.42,0.02,1.82), (side*0.42,0.18,0.83), 0.22, WHITE)
-        capsule("Hock_"+label, (side*0.42,0.18,0.83), (side*0.42,0.43,0.55), 0.19, WHITE)
-        # Long rabbit foot points forward (-Y).
-        uv("Rabbit_foot_"+label, (side*0.42,-0.12,0.28), (0.27,0.57,0.22), WHITE)
-        for j in range(3):
-            uv("Toe_"+label+str(j), (side*0.42+(j-1)*0.13,-0.57,0.24), (0.095,0.22,0.12), WHITE,16,12)
+    
 
-    # Tail
+        # Long connected leg forms with anatomical thigh-to-calf transitions.
+    for side, label in [(-1,"L"),(1,"R")]:
+        loft_mesh("Leg_"+label, [
+            (0.34,side*0.40,0.02,0.16,0.19),(0.55,side*0.40,0.02,0.19,0.20),
+            (0.82,side*0.40,0.02,0.18,0.19),(1.05,side*0.40,0.01,0.20,0.20),
+            (1.35,side*0.40,0.00,0.24,0.24),(1.68,side*0.40,0.00,0.30,0.29),
+            (1.98,side*0.40,0.00,0.40,0.36),(2.28,side*0.40,0.00,0.49,0.42),
+            (2.58,side*0.40,0.00,0.49,0.42),(2.82,side*0.40,0.00,0.38,0.34)
+        ], WHITE, 56)
+        loft_mesh("Foot_"+label, [(0.12,side*0.40,-0.32,0.18,0.28),(0.18,side*0.40,-0.25,0.23,0.48),(0.32,side*0.40,-0.16,0.22,0.42),(0.42,side*0.40,-0.02,0.16,0.24)], WHITE)
+        for j in range(3):
+            uv("Toe_"+label+str(j), (side*0.40+(j-1)*0.12,-0.58,0.19), (0.075,0.16,0.09), WHITE,16,12)
+
+    
+
+        # Tail
     uv("Cotton_tail", (0,0.49,3.13), (0.25,0.24,0.27), WHITE)
 
     # Basic ValveBiped-named skeleton for later weighting/animation work.
