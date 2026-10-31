@@ -17,12 +17,27 @@ jobs:
       - name: Install Blender
         run: |
           sudo apt-get update
-          sudo apt-get install -y blender libegl1 libgl1 libgles2 libgbm1
+          sudo apt-get install -y blender libegl1 libgl1 libgles2 libgbm1 python3-pip
+
+      - name: Install NumPy for Blender FBX exporter
+        run: |
+          PYVER="$(blender --background --factory-startup --python-expr 'import sys; print("BLENDER_PYTHON_VERSION=" + str(sys.version_info.major) + "." + str(sys.version_info.minor))' 2>&1 | sed -n 's/^BLENDER_PYTHON_VERSION=//p' | tail -n 1)"
+          if [ -z "$PYVER" ]; then
+            echo "Could not detect Blender's Python version"
+            exit 1
+          fi
+          PYTAG="$(echo "$PYVER" | awk -F. '{print "cp" $1 $2}')"
+          echo "Blender Python: $PYVER ($PYTAG)"
+          python3 -m pip install --disable-pip-version-check --target /tmp/blender-python-packages --only-binary=:all: --python-version "$PYVER" --implementation cp --abi "$PYTAG" "numpy==1.26.4"
 
       - name: Generate editable model and FBX
         run: |
           mkdir -p dist
+          export PYTHONPATH="/tmp/blender-python-packages:${PYTHONPATH:-}"
           blender --background --python model/femgram_generator.py
+          test -s /tmp/Femgram.blend
+          test -s /tmp/Femgram.fbx
+          test -s /tmp/Femgram-preview.png
           cp /tmp/Femgram.blend dist/Femgram.blend
           cp /tmp/Femgram.fbx dist/Femgram.fbx
           cp /tmp/Femgram-preview.png dist/Femgram-preview.png
