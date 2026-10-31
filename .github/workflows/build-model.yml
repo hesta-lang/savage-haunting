@@ -17,7 +17,7 @@ jobs:
       - name: Install Blender
         run: |
           sudo apt-get update
-          sudo apt-get install -y blender
+          sudo apt-get install -y blender libegl1 libgl1 libgles2 libgbm1
 
       - name: Generate editable model and FBX
         run: |
