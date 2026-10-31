@@ -1,38 +1,29 @@
 # Femgram — Garry's Mod Player Model
 
-Proyecto 3D de Femgram basado **únicamente en la última ilustración proporcionada**. La primera ilustración queda descartada.
+La referencia oficial es la **última imagen enviada por el usuario el 31-10-2026**. Todas las referencias anteriores quedan sustituidas.
 
-## Diseño aprobado
-
-- Coneja antropomórfica furry, pelaje blanco.
-- Silueta más alta y estilizada; muslos gruesos y redondeados, cintura moderada y abdomen sin volumen excesivo.
-- Orejas largas con interior negro; cabello blanco abundante y flequillo que cubre un ojo.
-- Un ojo visible negro, nariz/hocico pequeño.
-- Suéter gris holgado con cuello doblado.
-- Shorts negros deportivos con dos líneas blancas laterales.
-- Manos/patas furry y piernas digitígradas con pies de conejo.
+## Diseño oficial
+- Coneja antropomórfica de pelaje blanco y orejas largas con interior negro.
+- Cabello blanco muy largo, abundante y fluido, cayendo por detrás y a ambos lados hasta la zona de las caderas.
+- Ambos ojos grandes y negros visibles; flequillo ladeado.
+- Hocico pequeño y expresión neutral.
+- Suéter gris con cuello ancho doblado, hombros descubiertos y mangas largas holgadas.
+- Collar fino con pequeño colgante.
+- Shorts negros brillantes de cintura alta.
+- Cintura definida, torso estilizado y muslos muy gruesos, redondeados y proporcionados.
 - Estética anime/cartoon monocromática.
 
 ## Build desde Android
-
 1. Entra en **Actions**.
 2. Selecciona **Build Femgram Blender Model**.
 3. Pulsa **Run workflow** y confirma la rama `main`.
 4. Cuando finalice, abre el run y descarga **Femgram-3D-Source**.
 
-El artefacto incluye:
-- `Femgram.blend`: escena editable de Blender.
-- `Femgram.fbx`: geometría y armature base para intercambio.
+El artefacto previsto incluye `Femgram.blend`, `Femgram.fbx` y `Femgram-preview.png`.
 
 ## Estado técnico — importante
+La generación actual sigue siendo un **blockout procedural inicial**, no un Player Model terminado. El armature tiene nombres ValveBiped de referencia, pero aún falta skinning/weight painting, revisión de malla y deformaciones, animaciones y compilación Source. FBX/BLEND no se instalan directamente en Garry's Mod.
 
-La generación actual es un **blockout procedural inicial**, no un Player Model terminado. El armature contiene nombres ValveBiped de referencia, pero aún falta el skinning/weight painting, la revisión de proporciones y animaciones. FBX/BLEND no se pueden instalar directamente en Garry's Mod.
+Para un addon real aún se requiere modelado y limpieza de malla, pesos de vértices y pruebas de deformación, animaciones y QC, exportación SMD/DMX, compilación con herramientas Source/Crowbar, materiales VMT/VTF y pruebas dentro de Garry's Mod.
 
-Para llegar a un addon real se necesita:
-1. Ajustar y revisar la malla en Blender.
-2. Asignar pesos de vértices al esqueleto ValveBiped y comprobar deformaciones.
-3. Preparar animaciones y QC.
-4. Exportar SMD/DMX y compilar con las herramientas Source/Crowbar.
-5. Crear materiales VMT/VTF y probar el addon dentro de Garry's Mod.
-
-No se afirmará que el Player Model está listo hasta que exista el modelo Source compilado y se pruebe en el juego.
+No se afirmará que el Player Model está listo hasta compilarlo y probarlo en el juego.
