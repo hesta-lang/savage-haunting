@@ -185,6 +185,8 @@ def build():
     bpy.context.object.data.energy = 550
     bpy.context.object.data.size = 4
 
+    bpy.context.scene.render.filepath = "/tmp/Femgram-preview.png"
+    bpy.ops.render.render(write_still=True)
     bpy.ops.wm.save_as_mainfile(filepath="/tmp/Femgram.blend")
     bpy.ops.export_scene.fbx(filepath="/tmp/Femgram.fbx", use_selection=False, apply_scale_options='FBX_SCALE_ALL', add_leaf_bones=False, bake_anim=False)
 
