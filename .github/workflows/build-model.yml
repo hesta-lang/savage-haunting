@@ -25,6 +25,7 @@ jobs:
           blender --background --python model/femgram_generator.py
           cp /tmp/Femgram.blend dist/Femgram.blend
           cp /tmp/Femgram.fbx dist/Femgram.fbx
+          cp /tmp/Femgram-preview.png dist/Femgram-preview.png
 
       - name: Upload model artifact
         uses: actions/upload-artifact@v4
