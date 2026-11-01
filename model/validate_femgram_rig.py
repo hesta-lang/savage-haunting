@@ -389,6 +389,72 @@ render("Femgram-leg-pose-front", "front")
 render("Femgram-leg-pose-rear", "rear")
 render("Femgram-leg-pose-side", "left")
 
+
+# Bone-placement audit: export the actual rest-pose endpoints and render a visible
+# skeleton overlay. This is separate from skinning/pose tests.
+bone_audit = {}
+for bone_name in sorted(bone_names):
+    bone = arm.data.bones[bone_name]
+    head = arm.matrix_world @ bone.head_local
+    tail = arm.matrix_world @ bone.tail_local
+    bone_audit[bone_name] = {
+        "head_world": [round(float(v), 6) for v in head],
+        "tail_world": [round(float(v), 6) for v in tail],
+        "length": round((tail-head).length, 6),
+        "parent": bone.parent.name if bone.parent else None
+    }
+
+def make_overlay_material(name, color):
+    mat = bpy.data.materials.new(name)
+    mat.diffuse_color = (*color, 1.0)
+    mat.use_nodes = True
+    node = mat.node_tree.nodes.get("Principled BSDF")
+    node.inputs["Base Color"].default_value = (*color, 1.0)
+    node.inputs["Emission Color"].default_value = (*color, 1.0)
+    node.inputs["Emission Strength"].default_value = 1.2
+    node.inputs["Roughness"].default_value = 0.35
+    return mat
+
+bone_mat = make_overlay_material("RigOverlay_Bones", (0.08, 0.85, 1.0))
+joint_mat = make_overlay_material("RigOverlay_Joints", (1.0, 0.35, 0.06))
+overlay_objects = []
+def add_bone_rod(name, start, end):
+    delta = end-start
+    length = delta.length
+    if length < 1e-6:
+        return
+    bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius=max(size*0.0035, 0.002), depth=length, location=(start+end)*0.5)
+    obj = bpy.context.object
+    obj.name = "Overlay_" + name
+    obj.rotation_euler = delta.to_track_quat("Z", "Y").to_euler()
+    obj.data.materials.append(bone_mat)
+    overlay_objects.append(obj)
+
+joint_points = {}
+for bone_name, values in bone_audit.items():
+    if any(token in bone_name for token in ("_Thigh", "_Calf", "_Foot")):
+        head = Vector(values["head_world"])
+        tail = Vector(values["tail_world"])
+        add_bone_rod(bone_name, head, tail)
+        for label, point in (("head", head), ("tail", tail)):
+            key = tuple(round(float(v), 5) for v in point)
+            joint_points[key] = point
+for point in joint_points.values():
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=8, radius=max(size*0.008, 0.004), location=point)
+    obj = bpy.context.object
+    obj.name = "Overlay_Joint"
+    obj.data.materials.append(joint_mat)
+    overlay_objects.append(obj)
+
+# Hide the overlay objects from the neutral/pose meshes above; render explicit
+# rest-pose skeleton overlays now, then retain all measurements in JSON.
+reset_pose()
+render("Femgram-bones-front", "front")
+render("Femgram-bones-side", "left")
+for obj in overlay_objects:
+    obj.hide_render = True
+
+
 report = {
     "mesh_objects": len(meshes), "armature_objects": len(arms),
     "vertices": len(verts), "weighted_vertices": weighted,
@@ -399,7 +465,7 @@ report = {
     "pose_tests": pose_tests,
     "arm_pose_rms_displacement": round(arm_rms, 6),
     "leg_pose_rms_displacement": round(leg_rms, 6),
-    "renders": ["Femgram-neutral.png", "Femgram-neutral-rear.png", "Femgram-neutral-side.png", "Femgram-arm-pose.png", "Femgram-leg-pose-front.png", "Femgram-leg-pose-rear.png", "Femgram-leg-pose-side.png"],
+    "bone_rest_pose_world": bone_audit,\n    "renders": ["Femgram-bones-front.png", "Femgram-bones-side.png", "Femgram-neutral.png", "Femgram-neutral-rear.png", "Femgram-neutral-side.png", "Femgram-arm-pose.png", "Femgram-leg-pose-front.png", "Femgram-leg-pose-rear.png", "Femgram-leg-pose-side.png"],
     "checks": {
         "mesh_and_armature_present": bool(meshes and arms),
         "all_vertices_weighted": weighted == len(verts),
