@@ -71,21 +71,32 @@ for v in mesh.data.vertices:
  nx=(xw.x-cx)/w
  nz=(xw.z-lo[2])/h
  ax=abs(nx)
- # Explicit weights for exposed legs only; skirt and hair stay on the torso chain.
- if nz < .405 and .055 <= ax <= .145:
-  side="L" if nx >= 0 else "R"
-  if nz >= .315:
-   vals=[(side+"_Thigh",0.88),("Pelvis",0.12)]
-  elif nz >= .245:
-   vals=[(side+"_Thigh",0.62),(side+"_Calf",0.38)]
-  elif nz >= .145:
-   vals=[(side+"_Calf",0.88),(side+"_Thigh",0.12)]
-  elif nz >= .085:
-   vals=[(side+"_Calf",0.62),(side+"_Foot",0.38)]
+ # Smoothly isolate the two leg columns. The skirt and side/back hair remain
+ # pelvis-driven; a soft lateral and upper-thigh fade avoids hard weight seams.
+ def smoothstep(a,b,value):
+  t=max(0.0,min(1.0,(value-a)/(b-a)))
+  return t*t*(3.0-2.0*t)
+ side="L" if nx >= 0 else "R"
+ lateral=smoothstep(.045,.065,ax)*(1.0-smoothstep(.135,.165,ax))
+ vertical=1.0-smoothstep(.385,.445,nz)
+ leg_mask=max(0.0,min(1.0,lateral*vertical))
+ if leg_mask > 0.001:
+  # Blend neighbouring joints continuously instead of abrupt height bands.
+  if nz >= .29:
+   leg_vals=[(side+"_Thigh",1.0)]
+  elif nz >= .23:
+   t=smoothstep(.23,.29,nz)
+   leg_vals=[(side+"_Thigh",t),(side+"_Calf",1.0-t)]
+  elif nz >= .11:
+   leg_vals=[(side+"_Calf",1.0)]
+  elif nz >= .06:
+   t=smoothstep(.06,.11,nz)
+   leg_vals=[(side+"_Calf",t),(side+"_Foot",1.0-t)]
   else:
-   vals=[(side+"_Foot",0.90),(side+"_Calf",0.10)]
-  for n,weight in vals:
-   groups[n].add([v.index],weight,"REPLACE")
+   leg_vals=[(side+"_Foot",1.0)]
+  for n,weight in leg_vals:
+   groups[n].add([v.index],weight*leg_mask,"REPLACE")
+  groups["Pelvis"].add([v.index],1.0-leg_mask,"REPLACE")
   continue
  candidates=allowed_bones(nx,nz)
  if not candidates: candidates=[n for n,a,b in segments]
