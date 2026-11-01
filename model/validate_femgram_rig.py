@@ -377,14 +377,33 @@ arm_pose_positions = sampled_positions()
 arm_rms = math.sqrt(sum((arm_pose_positions[i] - neutral_positions[i]).length_squared for i in range(min(len(arm_pose_positions), len(neutral_positions)))) / min(len(arm_pose_positions), len(neutral_positions)))
 render("Femgram-arm-pose")
 
-# Restore, then bend both hips and knees.
-reset_pose()
-for side, sign in (("L", 1), ("R", -1)):
-    apply_joint("ValveBiped.Bip01_" + side + "_Thigh", sign * 0.35)
-    apply_joint("ValveBiped.Bip01_" + side + "_Calf", -sign * 0.50)
-bpy.context.view_layer.update()
-leg_pose_positions = sampled_positions()
-leg_rms = math.sqrt(sum((leg_pose_positions[i] - neutral_positions[i]).length_squared for i in range(min(len(leg_pose_positions), len(neutral_positions)))) / min(len(leg_pose_positions), len(neutral_positions)))
+# Leg deformation tests are isolated per side. The previous simultaneous
+# opposite-direction test made the knees overlap in projection and obscured
+# whether a crease came from the weights or from the deliberately crossed pose.
+leg_pose_tests = {}
+def run_leg_pose(side, hip_angle, knee_angle, label):
+    reset_pose()
+    apply_joint("ValveBiped.Bip01_" + side + "_Thigh", hip_angle)
+    apply_joint("ValveBiped.Bip01_" + side + "_Calf", knee_angle)
+    bpy.context.view_layer.update()
+    posed = sampled_positions()
+    count = min(len(posed), len(neutral_positions))
+    rms = math.sqrt(sum((posed[i] - neutral_positions[i]).length_squared
+                        for i in range(count)) / max(1, count))
+    render("Femgram-leg-pose-" + label + "-front", "front")
+    render("Femgram-leg-pose-" + label + "-side", "left")
+    leg_pose_tests[label] = {
+        "side": side, "hip_angle_radians": hip_angle,
+        "knee_angle_radians": knee_angle, "rms_displacement": round(rms, 6)
+    }
+    return rms
+
+left_leg_rms = run_leg_pose("L", 0.30, -0.55, "left")
+right_leg_rms = run_leg_pose("R", -0.30, 0.55, "right")
+left_knee_rms = run_leg_pose("L", 0.0, -0.65, "left-knee-only")
+right_knee_rms = run_leg_pose("R", 0.0, 0.65, "right-knee-only")
+leg_rms = max(left_leg_rms, right_leg_rms, left_knee_rms, right_knee_rms)
+# Keep the legacy names for consumers of earlier validation artifacts.
 render("Femgram-leg-pose-front", "front")
 render("Femgram-leg-pose-rear", "rear")
 render("Femgram-leg-pose-side", "left")
