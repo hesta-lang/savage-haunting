@@ -1,0 +1,65 @@
+name: Validate Femgram ValveBiped rig
+
+on:
+  workflow_dispatch:
+    inputs:
+      rig_run_id:
+        description: Run ID that produced Femgram-75K-ValveBiped-Rigged
+        required: true
+        default: "41318268047"
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: beta/gmod-addon
+
+      - name: Download rigged FBX
+        uses: actions/download-artifact@v4
+        with:
+          name: Femgram-75K-ValveBiped-Rigged
+          path: dist/rigged
+          repository: hesta-lang/savage-haunting
+          run-id: ${{ inputs.rig_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Locate FBX
+        id: rig
+        run: |
+          set -euo pipefail
+          FILE="$(find dist/rigged -name 'Femgram-75K-ValveBiped-Rigged.fbx' -print -quit)"
+          test -n "$FILE"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Install Blender
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libgles2 libgbm1 libx11-6 libxi6 libxrender1 libxxf86vm1 libxfixes3 libxkbcommon0
+          curl -fL --retry 3 https://download.blender.org/release/Blender4.4/blender-4.4.3-linux-x64.tar.xz -o /tmp/blender.tar.xz
+          tar -xJf /tmp/blender.tar.xz -C /tmp
+
+      - name: Run structural checks and pose renders
+        env:
+          RIGGED_FBX: ${{ steps.rig.outputs.file }}
+          OUTPUT_DIR: ${{ github.workspace }}/dist/validation
+        run: |
+          set -euo pipefail
+          /tmp/blender-4.4.3-linux-x64/blender --background --python model/validate_femgram_rig.py
+          test -s dist/validation/Femgram-Rig-Validation.json
+          test -s dist/validation/Femgram-neutral.png
+          test -s dist/validation/Femgram-arm-pose.png
+          test -s dist/validation/Femgram-leg-pose.png
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Femgram-Rig-Visual-Validation
+          path: dist/validation/
+          if-no-files-found: error
+          retention-days: 30
