@@ -18,7 +18,7 @@ eb={}; segments=[]
 def add(n,a,b,parent=None,connected=False):
  q=ad.edit_bones.new("ValveBiped.Bip01_"+n); q.head=a; q.tail=b
  if parent: q.parent=eb[parent]; q.use_connect=connected
- eb[n]=q
+ eb[n]=q; segments.append((n,Vector(a),Vector(b)))
 add("Root",p(0,.46),p(0,.49)); add("Pelvis",p(0,.46),p(0,.54),"Root")
 add("Spine",p(0,.54),p(0,.62),"Pelvis"); add("Spine1",p(0,.62),p(0,.69),"Spine")
 add("Spine2",p(0,.69),p(0,.75),"Spine1"); add("Neck",p(0,.75),p(0,.82),"Spine2"); add("Head",p(0,.82),p(0,.94),"Neck")
