@@ -10,7 +10,7 @@ on:
       target_vertices:
         description: "Target vertex count"
         required: true
-        default: "150000"
+        default: "100000"
         type: string
 
 permissions:
@@ -51,10 +51,10 @@ jobs:
           fi
           echo "SOURCE_FBX=$FBX" >> "$GITHUB_ENV"
 
-      - name: Optimize to approximately 150K vertices
+      - name: Optimize to approximately 100K vertices
         run: |
           set -e
-          /tmp/blender-4.4.3-linux-x64/blender --background --factory-startup --python model/optimize_femgram_fbx.py -- "$SOURCE_FBX" "$PWD/dist/Femgram-Lite-150K.fbx" "${{ inputs.target_vertices }}"
+          /tmp/blender-4.4.3-linux-x64/blender --background --factory-startup --python model/optimize_femgram_fbx.py -- "$SOURCE_FBX" "$PWD/dist/Femgram-Lite-100K.fbx" "${{ inputs.target_vertices }}"
           test -s dist/Femgram-Lite-150K.fbx
           mkdir -p dist/source-package
           cp -R input/unpacked/. dist/source-package/
