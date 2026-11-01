@@ -49,18 +49,15 @@ def distseg(x,a,b):
  v=b-a; t=max(0,min(1,(x-a).dot(v)/(v.dot(v)+1e-12))); return (x-(a+t*v)).length
 def allowed_bones(x,z):
  side="L" if x>=0 else "R"
- if z < .535:
-  # Keep the central pelvis independent from the legs. The leg corridor
-  # follows the two thigh centerlines; vertices outside it (long hair and
-  # the skirt silhouette) must not inherit thigh/calf/foot weights.
+ if z < .465:
+  # Keep the skirt and the long side/back hair attached to the pelvis.
+  # Only the clearly exposed leg section below the clothing hem may follow
+  # the thigh/calf chain. The upper thigh remains pelvis-weighted to avoid
+  # pulling the skirt hem apart during hip rotation.
   ax=abs(x)
-  if ax < .045 or ax > .175:
-   return ["Pelvis"] if z < .47 else ["Pelvis","Spine"]
-  leg=[side+"_Thigh",side+"_Calf",side+"_Foot"]
-  # Blend the pelvis into the top of the thigh only around the hip seam.
-  if z > .435:
-   leg.append("Pelvis")
-  return leg
+  if z >= .425 or ax < .045 or ax > .155:
+   return ["Pelvis"]
+  return [side+"_Thigh",side+"_Calf",side+"_Foot","Pelvis"]
  if z > .785:
   return [n for n,a,b in segments if n in ("Neck","Head")]
  if z >= .615 and abs(x) > .115:
