@@ -39,9 +39,9 @@ def area_light(name, location, energy, size):
     light.data.size = size
     light.rotation_euler = (center - light.location).to_track_quat("-Z", "Y").to_euler()
 
-area_light("Key", (center.x - radius, center.y - radius * 1.8, center.z + radius * 1.8), 1800, radius * 1.3)
-area_light("Fill", (center.x + radius * 1.5, center.y - radius, center.z + radius * 0.6), 950, radius)
-area_light("Rim", (center.x, center.y + radius * 1.5, center.z + radius * 1.4), 1400, radius)
+area_light("Key", (center.x - radius, center.y - radius * 1.8, center.z + radius * 1.8), 800, radius * 1.3)
+area_light("Fill", (center.x + radius * 1.5, center.y - radius, center.z + radius * 0.6), 250, radius)
+area_light("Rim", (center.x, center.y + radius * 1.5, center.z + radius * 1.4), 450, radius)
 
 scene = bpy.context.scene
 scene.render.engine = "BLENDER_EEVEE_NEXT"
@@ -51,8 +51,10 @@ scene.render.resolution_y = 1200
 scene.render.resolution_percentage = 100
 scene.render.image_settings.file_format = "PNG"
 scene.render.film_transparent = False
-scene.world.color = (0.055, 0.055, 0.055)
+scene.world.color = (0.018, 0.018, 0.018)
 scene.view_settings.view_transform = "AgX"
+scene.view_settings.look = "AgX - Medium High Contrast"
+scene.view_settings.exposure = -0.35
 scene.render.filepath = os.path.abspath(out)
 os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
 bpy.ops.render.render(write_still=True)
