@@ -71,31 +71,26 @@ for v in mesh.data.vertices:
  nx=(xw.x-cx)/w
  nz=(xw.z-lo[2])/h
  ax=abs(nx)
- # Smoothly isolate the two leg columns. The skirt and side/back hair remain
- # pelvis-driven; a soft lateral and upper-thigh fade avoids hard weight seams.
+ # Keep skirt and side/back hair outside the leg influence, but calculate
+ # the actual thigh/calf/foot blend from distance to the anatomical bone
+ # segments. This removes the hard height bands that caused visible seams.
  def smoothstep(a,b,value):
   t=max(0.0,min(1.0,(value-a)/(b-a)))
   return t*t*(3.0-2.0*t)
  side="L" if nx >= 0 else "R"
- lateral=smoothstep(.045,.065,ax)*(1.0-smoothstep(.135,.165,ax))
+ lateral=smoothstep(.035,.060,ax)*(1.0-smoothstep(.145,.180,ax))
  vertical=1.0-smoothstep(.385,.445,nz)
  leg_mask=max(0.0,min(1.0,lateral*vertical))
  if leg_mask > 0.001:
-  # Blend neighbouring joints continuously instead of abrupt height bands.
-  if nz >= .29:
-   leg_vals=[(side+"_Thigh",1.0)]
-  elif nz >= .23:
-   t=smoothstep(.23,.29,nz)
-   leg_vals=[(side+"_Thigh",t),(side+"_Calf",1.0-t)]
-  elif nz >= .11:
-   leg_vals=[(side+"_Calf",1.0)]
-  elif nz >= .06:
-   t=smoothstep(.06,.11,nz)
-   leg_vals=[(side+"_Calf",t),(side+"_Foot",1.0-t)]
-  else:
-   leg_vals=[(side+"_Foot",1.0)]
+  leg_names=[side+"_Thigh",side+"_Calf",side+"_Foot"]
+  # Distances are measured in model space against the actual bone segments.
+  # A softened inverse-distance blend distributes influence across knees
+  # and ankles rather than switching weights at a fixed Z coordinate.
+  leg_dist=[(distseg(xw,*segmap[n]),n) for n in leg_names]
+  leg_vals=[(n,1.0/((dist+0.018)**4.0)) for dist,n in leg_dist]
+  leg_total=sum(weight for n,weight in leg_vals)
   for n,weight in leg_vals:
-   groups[n].add([v.index],weight*leg_mask,"REPLACE")
+   groups[n].add([v.index],leg_mask*weight/leg_total,"REPLACE")
   groups["Pelvis"].add([v.index],1.0-leg_mask,"REPLACE")
   continue
  candidates=allowed_bones(nx,nz)
