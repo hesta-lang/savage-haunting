@@ -1,4 +1,4 @@
-name: Validate Femgram ValveBiped rig
+name: Validate Femgram ValveBiped rig (lighting and joint deformation)
 
 on:
   push:
