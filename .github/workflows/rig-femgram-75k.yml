@@ -1,6 +1,10 @@
 name: Rig optimized Femgram 75K for Garry's Mod
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/rig-femgram-75k.yml"
   workflow_dispatch:
     inputs:
       artifact_run_id:
