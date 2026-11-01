@@ -227,7 +227,18 @@ area("Key", (size * 0.9, -size * 1.5, size * 1.0), 650, size * 0.9)
 area("Fill", (-size * 1.0, -size * 1.0, size * 0.35), 280, size * 1.0)
 area("Rim", (0, size * 1.1, size * 0.8), 420, size * 0.8)
 
-def render(name):
+def set_camera_view(view):
+    if view == "front":
+        cam.location = center + Vector((0, -size * 3.2, size * 0.06))
+    elif view == "rear":
+        cam.location = center + Vector((0, size * 3.2, size * 0.06))
+    elif view == "left":
+        cam.location = center + Vector((-size * 3.2, 0, size * 0.06))
+    aim(cam, center)
+    bpy.context.view_layer.update()
+
+def render(name, view="front"):
+    set_camera_view(view)
     scene.render.filepath = os.path.join(out, name + ".png")
     bpy.ops.render.render(write_still=True)
 
@@ -285,7 +296,9 @@ def apply_joint(bone_name, angle):
 
 # Neutral
 reset_pose()
-render("Femgram-neutral")
+render("Femgram-neutral", "front")
+render("Femgram-neutral-rear", "rear")
+render("Femgram-neutral-side", "left")
 
 # Stronger, multi-joint arm pose: shoulders lift and elbows bend.
 reset_pose()
@@ -305,7 +318,9 @@ for side, sign in (("L", 1), ("R", -1)):
 bpy.context.view_layer.update()
 leg_pose_positions = sampled_positions()
 leg_rms = math.sqrt(sum((leg_pose_positions[i] - neutral_positions[i]).length_squared for i in range(min(len(leg_pose_positions), len(neutral_positions)))) / min(len(leg_pose_positions), len(neutral_positions)))
-render("Femgram-leg-pose")
+render("Femgram-leg-pose-front", "front")
+render("Femgram-leg-pose-rear", "rear")
+render("Femgram-leg-pose-side", "left")
 
 report = {
     "mesh_objects": len(meshes), "armature_objects": len(arms),
@@ -317,7 +332,7 @@ report = {
     "pose_tests": pose_tests,
     "arm_pose_rms_displacement": round(arm_rms, 6),
     "leg_pose_rms_displacement": round(leg_rms, 6),
-    "renders": ["Femgram-neutral.png", "Femgram-arm-pose.png", "Femgram-leg-pose.png"],
+    "renders": ["Femgram-neutral.png", "Femgram-neutral-rear.png", "Femgram-neutral-side.png", "Femgram-arm-pose.png", "Femgram-leg-pose-front.png", "Femgram-leg-pose-rear.png", "Femgram-leg-pose-side.png"],
     "checks": {
         "mesh_and_armature_present": bool(meshes and arms),
         "all_vertices_weighted": weighted == len(verts),
