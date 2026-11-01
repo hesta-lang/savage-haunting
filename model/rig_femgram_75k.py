@@ -50,14 +50,17 @@ def distseg(x,a,b):
 def allowed_bones(x,z):
  side="L" if x>=0 else "R"
  if z < .535:
-  # Keep pelvis/spine as transition influences, but explicitly include
-  # the matching side's lower-limb chain. The former expression compared
-  # "_Thigh" against "Thigh" and silently excluded every leg bone.
-  return [
-   n for n,a,b in segments
-   if n in ("Pelvis","Spine")
-   or (n.startswith(side+"_") and n.endswith(("_Thigh","_Calf","_Foot")))
-  ]
+  # Keep the central pelvis independent from the legs. The leg corridor
+  # follows the two thigh centerlines; vertices outside it (long hair and
+  # the skirt silhouette) must not inherit thigh/calf/foot weights.
+  ax=abs(x)
+  if ax < .045 or ax > .175:
+   return ["Pelvis"] if z < .47 else ["Pelvis","Spine"]
+  leg=[side+"_Thigh",side+"_Calf",side+"_Foot"]
+  # Blend the pelvis into the top of the thigh only around the hip seam.
+  if z > .435:
+   leg.append("Pelvis")
+  return leg
  if z > .785:
   return [n for n,a,b in segments if n in ("Neck","Head")]
  if z >= .615 and abs(x) > .115:
@@ -72,8 +75,12 @@ for v in mesh.data.vertices:
  nz=(xw.z-lo[2])/h
  candidates=allowed_bones(nx,nz)
  if not candidates: candidates=[n for n,a,b in segments]
- near=sorted((distseg(xw,*segmap[n]),n) for n in candidates)[:3]
- vals=[(n,1.0/((dist+0.035)**2.5)) for dist,n in near]
+ near=sorted((distseg(xw,*segmap[n]),n) for n in candidates)
+ # Use two influences for the leg itself; reserve a third only for the
+ # pelvis transition at the hip to prevent cross-joint smearing.
+ limit=2 if nz < .435 and any(n.endswith(("_Thigh","_Calf","_Foot")) for n in candidates) else 3
+ near=near[:limit]
+ vals=[(n,1.0/((dist+0.045)**3.0)) for dist,n in near]
  total=sum(weight for n,weight in vals)
  for n,weight in vals:
   groups[n].add([v.index],weight/total,"REPLACE")
