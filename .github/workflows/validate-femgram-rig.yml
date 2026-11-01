@@ -1,4 +1,4 @@
-name: Validate Femgram ValveBiped rig (skirt and hair protection)
+name: Validate Femgram leg joint deformation (distance-blended weights)
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
       rig_run_id:
         description: Run ID that produced Femgram-75K-ValveBiped-Rigged
         required: true
-        default: "41324226503"
+        default: "41325420322"
         type: string
 
 permissions:
