@@ -36,24 +36,45 @@ for s,sgn in (("L",1),("R",-1)):
   n=s+"_Finger"+str(i); a=p(sgn*.455,.69,off); b=p(sgn*.48,.69,off); c=p(sgn*.50,.69,off)
   add(n,a,b,hand); add(n+"_1",b,c,n,True); add(n+"_2",c,p(sgn*.51,.69,off),n+"_1",True)
 bpy.ops.object.mode_set(mode="OBJECT"); arm.show_in_front=True
-# Heat weights, with a deterministic nearest-bone fallback for difficult meshes.
-bpy.ops.object.select_all(action="DESELECT"); mesh.select_set(True); arm.select_set(True); bpy.context.view_layer.objects.active=arm
-auto=False; err=None
-try:
- bpy.ops.object.parent_set(type="ARMATURE_AUTO"); auto=any(v.groups for v in mesh.data.vertices)
-except Exception as e: err=str(e)
-if not auto:
- for g in list(mesh.vertex_groups): mesh.vertex_groups.remove(g)
- segments=[(n,a,b) for n,a,b in segments if n!="Root"]
- groups={n:mesh.vertex_groups.new(name="ValveBiped.Bip01_"+n) for n,a,b in segments}
- def distseg(x,a,b):
-  v=b-a; t=max(0,min(1,(x-a).dot(v)/(v.dot(v)+1e-12))); return (x-(a+t*v)).length
- for v in mesh.data.vertices:
-  x=mesh.matrix_world@v.co; near=sorted((distseg(x,a,b),n) for n,a,b in segments)[:4]
-  vals=[(n,1/(dist+.025)**3) for dist,n in near]; total=sum(z for n,z in vals)
-  for n,z in vals: groups[n].add([v.index],z/total,"REPLACE")
- mod=next((m for m in mesh.modifiers if m.type=="ARMATURE"),None) or mesh.modifiers.new("Femgram Armature","ARMATURE")
- mod.object=arm; mesh.parent=arm
+# Controlled anatomical weights: avoid Blender heat weights bleeding across limbs.
+# The model is a proportion-based T-pose; use region + side filtering and at most
+# three nearby bones so opposite limbs and fingers cannot steal influence.
+for g in list(mesh.vertex_groups):
+ mesh.vertex_groups.remove(g)
+for m in list(mesh.modifiers):
+ if m.type=="ARMATURE": mesh.modifiers.remove(m)
+segments=[(n,a,b) for n,a,b in segments if n!="Root"]
+groups={n:mesh.vertex_groups.new(name="ValveBiped.Bip01_"+n) for n,a,b in segments}
+def distseg(x,a,b):
+ v=b-a; t=max(0,min(1,(x-a).dot(v)/(v.dot(v)+1e-12))); return (x-(a+t*v)).length
+def allowed_bones(x,z):
+ side="L" if x>=0 else "R"
+ if z < .535:
+  return [n for n,a,b in segments if n in ("Pelvis","Spine") or ("_"+n.split("_")[-1] in ("Thigh","Calf","Foot") and n.startswith(side+"_"))]
+ if z > .785:
+  return [n for n,a,b in segments if n in ("Neck","Head")]
+ if z >= .615 and abs(x) > .115:
+  names=[n for n,a,b in segments if n in ("Spine2",side+"_Clavicle",side+"_UpperArm",side+"_Forearm",side+"_Hand") or n.startswith(side+"_Finger")]
+  if abs(x) < .405: names=[n for n in names if "Finger" not in n]
+  return names
+ return [n for n,a,b in segments if n in ("Pelvis","Spine","Spine1","Spine2","Neck","Head","L_Clavicle","R_Clavicle")]
+segmap={n:(a,b) for n,a,b in segments}
+for v in mesh.data.vertices:
+ xw=mesh.matrix_world@v.co
+ nx=(xw.x-cx)/w
+ nz=(xw.z-lo[2])/h
+ candidates=allowed_bones(nx,nz)
+ if not candidates: candidates=[n for n,a,b in segments]
+ near=sorted((distseg(xw,*segmap[n]),n) for n in candidates)[:3]
+ vals=[(n,1.0/((dist+0.035)**2.5)) for dist,n in near]
+ total=sum(weight for n,weight in vals)
+ for n,weight in vals:
+  groups[n].add([v.index],weight/total,"REPLACE")
+mod=mesh.modifiers.new("Femgram Armature","ARMATURE")
+mod.object=arm
+mesh.parent=arm
+auto=False
+err="Using controlled anatomical region/side weights instead of automatic heat weights"
 # Normalize each vertex's influences.
 for v in mesh.data.vertices:
  total=sum(g.weight for g in v.groups)
