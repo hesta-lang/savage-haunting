@@ -16,14 +16,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Blender and export dependencies
+      - name: Install Blender 4.4.3 and runtime libraries
         run: |
           sudo apt-get update
-          sudo apt-get install -y blender libegl1 libgl1 libgles2 libgbm1 python3-pip
+          sudo apt-get install -y libegl1 libgl1 libgles2 libgbm1 libx11-6 libxi6 libxrender1 libxxf86vm1 libxfixes3 libxkbcommon0
+          curl -fL --retry 3 "https://download.blender.org/release/Blender4.4/blender-4.4.3-linux-x64.tar.xz" -o /tmp/blender.tar.xz
+          tar -xJf /tmp/blender.tar.xz -C /tmp
+          echo "/tmp/blender-4.4.3-linux-x64" >> "$GITHUB_PATH"
+          /tmp/blender-4.4.3-linux-x64/blender --version
 
       - name: Install NumPy for Blender FBX exporter
         run: |
-          PYVER="$(blender --background --factory-startup --python-expr 'import sys; print("BLENDER_PYTHON_VERSION=" + str(sys.version_info.major) + "." + str(sys.version_info.minor))' 2>&1 | sed -n 's/^BLENDER_PYTHON_VERSION=//p' | tail -n 1)"
+          BLENDER="/tmp/blender-4.4.3-linux-x64/blender"
+          PYVER="$("$BLENDER" --background --factory-startup --python-expr 'import sys; print("BLENDER_PYTHON_VERSION=" + str(sys.version_info.major) + "." + str(sys.version_info.minor))' 2>&1 | sed -n 's/^BLENDER_PYTHON_VERSION=//p' | tail -n 1)"
           if [ -z "$PYVER" ]; then
             echo "Could not detect Blender's Python version"
             exit 1
@@ -34,6 +39,7 @@ jobs:
       - name: Find and process Meshy blend with PNG textures
         run: |
           set -e
+          BLENDER="/tmp/blender-4.4.3-linux-x64/blender"
           SOURCE="$(find model/source -maxdepth 1 -type f -name '*.blend' -print -quit)"
           if [ -z "$SOURCE" ]; then
             echo "No .blend file found in model/source"
@@ -41,7 +47,7 @@ jobs:
           fi
           mkdir -p dist
           export PYTHONPATH="/tmp/blender-python-packages:${PYTHONPATH:-}"
-          blender --background "$SOURCE" --python model/inspect_meshy_blend.py -- --output-dir "$PWD/dist" --texture-dir "$PWD/model/textures"
+          "$BLENDER" --background "$SOURCE" --python model/inspect_meshy_blend.py -- --output-dir "$PWD/dist" --texture-dir "$PWD/model/textures"
           test -s dist/Femgram-Meshy-Textured.blend
           test -s dist/Femgram-Meshy-Textured.fbx
           test -s dist/Femgram-Meshy-inspection.json
