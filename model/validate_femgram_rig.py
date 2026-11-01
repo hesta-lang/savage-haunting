@@ -122,6 +122,8 @@ def sampled_positions():
         evaluated.to_mesh_clear()
 
 def choose_axis(bone_name, angle):
+    # Preserve earlier joint rotations while testing this joint's local axes.
+    saved = {pb.name: pb.rotation_euler.copy() for pb in arm.pose.bones}
     best = (0.0, 0)
     for axis in range(3):
         reset_pose()
@@ -130,13 +132,16 @@ def choose_axis(bone_name, angle):
             continue
         pb.rotation_euler[axis] = angle
         after = sampled_positions()
-        before = neutral_positions
-        count = min(len(before), len(after))
+        count = min(len(neutral_positions), len(after))
         if count:
-            rms = math.sqrt(sum((after[i] - before[i]).length_squared for i in range(count)) / count)
+            rms = math.sqrt(sum((after[i] - neutral_positions[i]).length_squared for i in range(count)) / count)
             if rms > best[0]:
                 best = (rms, axis)
     reset_pose()
+    for name, rotation in saved.items():
+        if name in arm.pose.bones:
+            arm.pose.bones[name].rotation_euler = rotation
+    bpy.context.view_layer.update()
     return best
 
 reset_pose()
