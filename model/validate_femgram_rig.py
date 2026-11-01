@@ -1,4 +1,5 @@
-import bpy, os, json, math
+import bpy, os, json, math, bmesh
+from collections import defaultdict
 from mathutils import Vector
 
 src = os.environ["RIGGED_FBX"]
@@ -35,6 +36,133 @@ height = hi[2] - lo[2]
 width = hi[0] - lo[0]
 depth = hi[1] - lo[1]
 size = max(height, width, depth)
+
+# Geometry and skinning diagnostics. These are measurements, not automatic
+# proof of visual quality; thresholds are deliberately reported separately.
+bm = bmesh.new()
+bm.from_mesh(mesh.data)
+bm.verts.ensure_lookup_table()
+bm.edges.ensure_lookup_table()
+bm.faces.ensure_lookup_table()
+
+# Connected components of the surface, using mesh-edge connectivity.
+parent = list(range(len(bm.verts)))
+def find_root(i):
+    while parent[i] != i:
+        parent[i] = parent[parent[i]]
+        i = parent[i]
+    return i
+def union(a, b):
+    ra, rb = find_root(a), find_root(b)
+    if ra != rb:
+        parent[rb] = ra
+for edge in bm.edges:
+    if len(edge.verts) == 2:
+        union(edge.verts[0].index, edge.verts[1].index)
+components = defaultdict(int)
+for vert in bm.verts:
+    components[find_root(vert.index)] += 1
+
+boundary_edges = sum(1 for e in bm.edges if len(e.link_faces) == 1)
+wire_edges = sum(1 for e in bm.edges if len(e.link_faces) == 0)
+nonmanifold_edges = sum(1 for e in bm.edges if not e.is_manifold)
+degenerate_faces = sum(1 for face in bm.faces if face.calc_area() < 1e-10)
+zero_length_edges = sum(1 for e in bm.edges if e.calc_length() < 1e-8)
+inconsistent_normal_pairs = 0
+for edge in bm.edges:
+    if len(edge.link_faces) == 2:
+        if edge.link_faces[0].normal.dot(edge.link_faces[1].normal) < -0.25:
+            inconsistent_normal_pairs += 1
+
+# Per-vertex normalized group weights; compare adjacent vertices for sharp
+# changes in skinning. The L1 metric is bounded by 2 for normalized weights.
+group_names = [g.name for g in mesh.vertex_groups]
+group_index_to_name = {g.index: g.name for g in mesh.vertex_groups}
+vertex_weights = []
+for vert in verts:
+    weights = {group_index_to_name[g.group]: float(g.weight)
+               for g in vert.groups if g.group in group_index_to_name and g.weight > 1e-8}
+    total = sum(weights.values())
+    if total > 1e-8:
+        weights = {k: v / total for k, v in weights.items()}
+    vertex_weights.append(weights)
+
+def weight_distance(a, b):
+    keys = set(a) | set(b)
+    return sum(abs(a.get(k, 0.0) - b.get(k, 0.0)) for k in keys)
+
+edge_diffs = [weight_distance(vertex_weights[e.verts[0].index],
+                              vertex_weights[e.verts[1].index]) for e in bm.edges]
+edge_diffs_sorted = sorted(edge_diffs)
+def percentile(values, p):
+    if not values:
+        return 0.0
+    return values[min(len(values)-1, int(round((len(values)-1) * p)))]
+
+# Body-zone summaries based on normalized coordinates. These bins are
+# diagnostic approximations; they do not decide which vertices are anatomy.
+def norm_x(v):
+    return (mesh.matrix_world @ v.co).x
+def norm_z(v):
+    return (mesh.matrix_world @ v.co).z
+def nz(v):
+    return (norm_z(v) - lo[2]) / max(height, 1e-8)
+def nx(v):
+    return ((norm_x(v) - (lo[0]+hi[0])*0.5) / max(width, 1e-8))
+regions = {
+    "lower_body": lambda v: nz(v) < 0.48,
+    "left_lower_body": lambda v: nz(v) < 0.48 and nx(v) > 0.025,
+    "right_lower_body": lambda v: nz(v) < 0.48 and nx(v) < -0.025,
+    "torso": lambda v: 0.38 <= nz(v) <= 0.72,
+    "upper_body": lambda v: nz(v) > 0.68
+}
+focus_groups = [n for n in group_names if any(
+    token in n.lower() for token in ("pelvis", "thigh", "calf", "foot"))]
+region_weight_summary = {}
+for region, predicate in regions.items():
+    indices = [v.index for v in verts if predicate(v)]
+    totals = defaultdict(float)
+    active = defaultdict(int)
+    for idx in indices:
+        for name, value in vertex_weights[idx].items():
+            totals[name] += value
+            if value > 0.05:
+                active[name] += 1
+    denom = max(1, len(indices))
+    region_weight_summary[region] = {
+        "vertices": len(indices),
+        "mean_weight_by_leg_group": {
+            name: round(totals[name] / denom, 5) for name in focus_groups
+        },
+        "vertices_with_influence_over_0_05": {
+            name: active[name] for name in focus_groups
+        }
+    }
+
+geometry_diagnostics = {
+    "vertices": len(bm.verts),
+    "edges": len(bm.edges),
+    "faces": len(bm.faces),
+    "connected_components": len(components),
+    "component_vertex_counts_largest_first": sorted(components.values(), reverse=True)[:20],
+    "boundary_edges": boundary_edges,
+    "wire_edges": wire_edges,
+    "nonmanifold_edges": nonmanifold_edges,
+    "degenerate_faces": degenerate_faces,
+    "zero_length_edges": zero_length_edges,
+    "adjacent_face_normal_pairs_opposed": inconsistent_normal_pairs,
+    "weight_edge_discontinuity": {
+        "edge_samples": len(edge_diffs),
+        "mean_l1": round(sum(edge_diffs) / max(1, len(edge_diffs)), 6),
+        "p50_l1": round(percentile(edge_diffs_sorted, 0.50), 6),
+        "p95_l1": round(percentile(edge_diffs_sorted, 0.95), 6),
+        "p99_l1": round(percentile(edge_diffs_sorted, 0.99), 6),
+        "edges_l1_over_0_75": sum(1 for d in edge_diffs if d > 0.75),
+        "edges_l1_over_1_25": sum(1 for d in edge_diffs if d > 1.25)
+    },
+    "regional_skinning_weights": region_weight_summary
+}
+bm.free()
 
 scene = bpy.context.scene
 scene.render.engine = "BLENDER_EEVEE_NEXT"
@@ -185,6 +313,7 @@ report = {
     "unweighted_vertices": len(verts)-weighted, "bones": len(bone_names),
     "missing_expected_bones": missing, "armature_modifier_linked": bool(arm_mods),
     "vertex_groups": len(mesh.vertex_groups),
+    "geometry_diagnostics": geometry_diagnostics,
     "pose_tests": pose_tests,
     "arm_pose_rms_displacement": round(arm_rms, 6),
     "leg_pose_rms_displacement": round(leg_rms, 6),
