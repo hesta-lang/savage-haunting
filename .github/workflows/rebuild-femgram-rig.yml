@@ -39,12 +39,34 @@ jobs:
           test -n "$FILE"
           echo "file=$FILE" >> "$GITHUB_OUTPUT"
 
-      - name: Install Blender runtime
+      - name: Cache Blender runtime
+        id: blender-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/blender-4.4.3-linux-x64
+          key: blender-4.4.3-ubuntu-24.04-v1
+
+      - name: Install missing Blender system libraries
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libegl1 libgl1 libgles2 libgbm1 libx11-6 libxi6 libxrender1 libxxf86vm1 libxfixes3 libxkbcommon0
+          set -euo pipefail
+          missing=0
+          for lib in libEGL.so.1 libGL.so.1 libGLESv2.so.2 libgbm.so.1 libX11.so.6 libXi.so.6 libXrender.so.1 libXxf86vm.so.1 libXfixes.so.3 libxkbcommon.so.0; do
+            if ! ldconfig -p | grep -q "$lib"; then missing=1; fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            sudo apt-get update
+            sudo apt-get install -y libegl1 libgl1 libgles2 libgbm1 libx11-6 libxi6 libxrender1 libxxf86vm1 libxfixes3 libxkbcommon0
+          else
+            echo "All Blender runtime libraries are already available."
+          fi
+
+      - name: Download Blender runtime
+        if: steps.blender-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
           curl -fL --retry 3 https://download.blender.org/release/Blender4.4/blender-4.4.3-linux-x64.tar.xz -o /tmp/blender.tar.xz
           tar -xJf /tmp/blender.tar.xz -C /tmp
+          rm -f /tmp/blender.tar.xz
 
       - name: Generate corrected ValveBiped rig
         env:
