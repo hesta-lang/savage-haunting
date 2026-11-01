@@ -198,8 +198,8 @@ with open(os.path.join(out_dir, "Femgram-Meshy-texture-summary.txt"), "w", encod
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
 
-// Create preview renders only; camera and lights are not saved into the model.
-// The mesh, face, and texture coordinates are left untouched.
+# Create preview renders only; camera and lights are not saved into the model.
+# The mesh, face, and texture coordinates are left untouched.
 try:
     scene = bpy.context.scene
     scene.render.engine = "BLENDER_EEVEE_NEXT"
