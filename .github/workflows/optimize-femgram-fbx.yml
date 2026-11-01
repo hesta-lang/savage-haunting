@@ -1,0 +1,65 @@
+name: Femgram light FBX optimization
+
+on:
+  workflow_dispatch:
+    inputs:
+      google_drive_zip_id:
+        description: "Google Drive file ID of the ZIP containing the FBX files and textures"
+        required: true
+        type: string
+      target_vertices:
+        description: "Target vertex count"
+        required: true
+        default: "150000"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  optimize:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Blender 4.4.3
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libgles2 libgbm1 libx11-6 libxi6 libxrender1 libxxf86vm1 libxfixes3 libxkbcommon0
+          curl -fL --retry 3 "https://download.blender.org/release/Blender4.4/blender-4.4.3-linux-x64.tar.xz" -o /tmp/blender.tar.xz
+          tar -xJf /tmp/blender.tar.xz -C /tmp
+          echo "/tmp/blender-4.4.3-linux-x64" >> "$GITHUB_PATH"
+
+      - name: Download source ZIP from Google Drive
+        env:
+          DRIVE_ID: ${{ inputs.google_drive_zip_id }}
+        run: |
+          python3 -m pip install --user gdown
+          mkdir -p input dist
+          ~/.local/bin/gdown --id "$DRIVE_ID" -O input/femgram-source.zip
+          unzip -q input/femgram-source.zip -d input/unpacked
+          FBX="$(find input/unpacked -type f -name 'base_basic_pbr.fbx' -print -quit)"
+          if [ -z "$FBX" ]; then
+            echo "base_basic_pbr.fbx was not found in the ZIP"
+            find input/unpacked -maxdepth 3 -type f
+            exit 1
+          fi
+          echo "SOURCE_FBX=$FBX" >> "$GITHUB_ENV"
+
+      - name: Optimize to approximately 150K vertices
+        run: |
+          set -e
+          /tmp/blender-4.4.3-linux-x64/blender --background --factory-startup --python model/optimize_femgram_fbx.py -- "$SOURCE_FBX" "$PWD/dist/Femgram-Lite-150K.fbx" "${{ inputs.target_vertices }}"
+          test -s dist/Femgram-Lite-150K.fbx
+          cp -R input/unpacked/. dist/source-package/
+
+      - name: Upload optimized FBX, textures and report
+        uses: actions/upload-artifact@v4
+        with:
+          name: Femgram-Lite-Optimized
+          path: |
+            dist/Femgram-Lite-150K.fbx
+            dist/Femgram-Lite-150K-report.json
+            dist/source-package/
+          if-no-files-found: error
+          retention-days: 30
