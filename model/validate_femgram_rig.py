@@ -226,7 +226,8 @@ geometry_diagnostics = {
         "edges_l1_over_0_75": sum(1 for d in edge_diffs if d > 0.75),
         "edges_l1_over_1_25": sum(1 for d in edge_diffs if d > 1.25)
     },
-    "adaptive_surface_sample_counts": adaptive_surface_counts,\n    "regional_skinning_weights": region_weight_summary
+    "adaptive_surface_sample_counts": adaptive_surface_counts,
+    "regional_skinning_weights": region_weight_summary
 }
 bm.free()
 
