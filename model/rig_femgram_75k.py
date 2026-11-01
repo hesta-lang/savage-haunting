@@ -14,7 +14,7 @@ cx=(lo[0]+hi[0])/2; cy=(lo[1]+hi[1])/2
 def p(x,z,y=0): return Vector((cx+x*w,cy+y*d,lo[2]+z*h))
 ad=bpy.data.armatures.new("Femgram_ValveBiped"); arm=bpy.data.objects.new("Femgram_ValveBiped",ad); bpy.context.collection.objects.link(arm)
 bpy.context.view_layer.objects.active=arm; arm.select_set(True); bpy.ops.object.mode_set(mode="EDIT")
-eb={}
+eb={}; segments=[]
 def add(n,a,b,parent=None,connected=False):
  q=ad.edit_bones.new("ValveBiped.Bip01_"+n); q.head=a; q.tail=b
  if parent: q.parent=eb[parent]; q.use_connect=connected
@@ -44,7 +44,7 @@ try:
 except Exception as e: err=str(e)
 if not auto:
  for g in list(mesh.vertex_groups): mesh.vertex_groups.remove(g)
- segments=[(n,Vector(b.head),Vector(b.tail)) for n,b in eb.items() if n!="Root"]
+ segments=[(n,a,b) for n,a,b in segments if n!="Root"]
  groups={n:mesh.vertex_groups.new(name="ValveBiped.Bip01_"+n) for n,a,b in segments}
  def distseg(x,a,b):
   v=b-a; t=max(0,min(1,(x-a).dot(v)/(v.dot(v)+1e-12))); return (x-(a+t*v)).length
