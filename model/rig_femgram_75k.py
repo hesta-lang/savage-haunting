@@ -96,8 +96,11 @@ for v in mesh.data.vertices:
   # the knee even where the intended blend was 50/50. The leg mask already
   # isolates each exposed leg from the skirt/torso, so a smooth height blend
   # gives predictable joint transitions without changing the source mesh.
-  knee_blend=smoothstep(.12,.42,nz)
-  ankle_blend=smoothstep(.015,.16,nz)
+  # Concentrate blending around the actual joint centers instead of spreading
+  # thigh influence across most of the leg. The knee is centered at z=.265
+  # and the ankle at z=.075 in the normalized source-mesh coordinates.
+  knee_blend=smoothstep(.235,.295,nz)
+  ankle_blend=smoothstep(.055,.095,nz)
   leg_gates={
    side+"_Thigh": knee_blend,
    side+"_Calf": (1.0-knee_blend)*ankle_blend,
