@@ -10,7 +10,7 @@ on:
       target_vertices:
         description: "Target vertex count"
         required: true
-        default: "100000"
+        default: "75000"
         type: string
 
 permissions:
@@ -51,11 +51,11 @@ jobs:
           fi
           echo "SOURCE_FBX=$FBX" >> "$GITHUB_ENV"
 
-      - name: Optimize to approximately 100K vertices
+      - name: Optimize to approximately 75K vertices
         run: |
           set -e
-          /tmp/blender-4.4.3-linux-x64/blender --background --factory-startup --python model/optimize_femgram_fbx.py -- "$SOURCE_FBX" "$PWD/dist/Femgram-Lite-100K.fbx" "${{ inputs.target_vertices }}"
-          test -s dist/Femgram-Lite-100K.fbx
+          /tmp/blender-4.4.3-linux-x64/blender --background --factory-startup --python model/optimize_femgram_fbx.py -- "$SOURCE_FBX" "$PWD/dist/Femgram-Lite-75K.fbx" "${{ inputs.target_vertices }}"
+          test -s dist/Femgram-Lite-75K.fbx
           mkdir -p dist/source-package
           cp -R input/unpacked/. dist/source-package/
 
@@ -64,26 +64,26 @@ jobs:
           set -e
           BLENDER=/tmp/blender-4.4.3-linux-x64/blender
           "$BLENDER" --background --factory-startup --python model/render_femgram_preview.py -- "$SOURCE_FBX" "$PWD/dist/Femgram-Original-render.png"
-          "$BLENDER" --background --factory-startup --python model/render_femgram_preview.py -- "$PWD/dist/Femgram-Lite-100K.fbx" "$PWD/dist/Femgram-Lite-100K-render.png"
+          "$BLENDER" --background --factory-startup --python model/render_femgram_preview.py -- "$PWD/dist/Femgram-Lite-75K.fbx" "$PWD/dist/Femgram-Lite-75K-render.png"
           test -s dist/Femgram-Original-render.png
-          test -s dist/Femgram-Lite-100K-render.png
+          test -s dist/Femgram-Lite-75K-render.png
           python3 -m pip install --user pillow
           python3 - <<'PY'
           from PIL import Image, ImageOps, ImageDraw
           original = Image.open("dist/Femgram-Original-render.png").convert("RGB")
-          optimized = Image.open("dist/Femgram-Lite-100K-render.png").convert("RGB")
+          optimized = Image.open("dist/Femgram-Lite-75K-render.png").convert("RGB")
           if original.size != optimized.size:
               raise SystemExit(f"Render dimensions differ: {original.size} vs {optimized.size}")
           pad, label_h = 24, 54
           canvas = Image.new("RGB", (original.width * 2 + pad * 3, original.height + label_h + pad * 2), (24, 24, 24))
           draw = ImageDraw.Draw(canvas)
           draw.text((pad, pad), "ORIGINAL · SOURCE FBX", fill=(245, 245, 245))
-          draw.text((original.width + pad * 2, pad), "OPTIMIZED · 100K VERTICES", fill=(245, 245, 245))
+          draw.text((original.width + pad * 2, pad), "OPTIMIZED · 75K VERTICES", fill=(245, 245, 245))
           y = pad + label_h
           canvas.paste(original, (pad, y))
           canvas.paste(optimized, (original.width + pad * 2, y))
-          canvas.save("dist/Femgram-Original-vs-100K.png", quality=95)
-          print("COMPARISON_RENDER=dist/Femgram-Original-vs-100K.png")
+          canvas.save("dist/Femgram-Original-vs-75K.png", quality=95)
+          print("COMPARISON_RENDER=dist/Femgram-Original-vs-75K.png")
           PY
 
       - name: Upload optimized FBX, textures, report and comparison renders
@@ -91,11 +91,11 @@ jobs:
         with:
           name: Femgram-Lite-Optimized
           path: |
-            dist/Femgram-Lite-100K.fbx
-            dist/Femgram-Lite-100K-report.json
-            dist/Femgram-Lite-100K-render.png
+            dist/Femgram-Lite-75K.fbx
+            dist/Femgram-Lite-75K-report.json
+            dist/Femgram-Lite-75K-render.png
             dist/Femgram-Original-render.png
-            dist/Femgram-Original-vs-100K.png
+            dist/Femgram-Original-vs-75K.png
             dist/source-package/
           if-no-files-found: error
           retention-days: 30
