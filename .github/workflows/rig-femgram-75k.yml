@@ -1,0 +1,56 @@
+name: Rig optimized Femgram 75K for Garry's Mod
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_run_id:
+        description: Run ID that produced Femgram-Lite-Optimized
+        required: true
+        default: "41315502143"
+        type: string
+permissions:
+  actions: read
+  contents: read
+jobs:
+  rig:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: beta/gmod-addon
+      - name: Download approved 75K model
+        uses: actions/download-artifact@v4
+        with:
+          name: Femgram-Lite-Optimized
+          path: dist/optimized
+          repository: hesta-lang/savage-haunting
+          run-id: ${{ inputs.artifact_run_id }}
+          github-token: ${{ github.token }}
+      - name: Find FBX
+        id: model
+        run: |
+          set -euo pipefail
+          FILE="$(find dist/optimized -name 'Femgram-Lite-75K.fbx' -print -quit)"
+          test -n "$FILE"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+      - name: Install Blender
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libgles2 libgbm1 libx11-6 libxi6 libxrender1 libxxf86vm1 libxfixes3 libxkbcommon0
+          curl -fL --retry 3 https://download.blender.org/release/Blender4.4/blender-4.4.3-linux-x64.tar.xz -o /tmp/blender.tar.xz
+          tar -xJf /tmp/blender.tar.xz -C /tmp
+      - name: Create ValveBiped rig and skin weights
+        env:
+          SOURCE_FBX: ${{ steps.model.outputs.file }}
+          OUTPUT_DIR: ${{ github.workspace }}/dist/rigged
+        run: |
+          set -euo pipefail
+          /tmp/blender-4.4.3-linux-x64/blender --background --python model/rig_femgram_75k.py
+          test -s dist/rigged/Femgram-75K-ValveBiped-Rigged.fbx
+          test -s dist/rigged/Femgram-75K-Rig-Report.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Femgram-75K-ValveBiped-Rigged
+          path: dist/rigged/
+          if-no-files-found: error
+          retention-days: 30
