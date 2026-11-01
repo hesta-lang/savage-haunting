@@ -1,4 +1,4 @@
-name: Validate Femgram leg joint deformation (distance-blended weights)
+name: Validate Femgram rig topology, skinning and pose deformation
 
 on:
   push:
@@ -50,7 +50,7 @@ jobs:
           curl -fL --retry 3 https://download.blender.org/release/Blender4.4/blender-4.4.3-linux-x64.tar.xz -o /tmp/blender.tar.xz
           tar -xJf /tmp/blender.tar.xz -C /tmp
 
-      - name: Run structural checks and pose renders
+      - name: Run topology, skinning diagnostics and pose renders
         env:
           RIGGED_FBX: ${{ steps.rig.outputs.file }}
           OUTPUT_DIR: ${{ github.workspace }}/dist/validation
@@ -61,6 +61,7 @@ jobs:
           test -s dist/validation/Femgram-neutral.png
           test -s dist/validation/Femgram-arm-pose.png
           test -s dist/validation/Femgram-leg-pose.png
+          python -c 'import json; d=json.load(open("dist/validation/Femgram-Rig-Validation.json")); assert "geometry_diagnostics" in d; assert "regional_skinning_weights" in d["geometry_diagnostics"]; assert "weight_edge_discontinuity" in d["geometry_diagnostics"]'
 
       - uses: actions/upload-artifact@v4
         with:
