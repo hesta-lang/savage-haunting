@@ -65,7 +65,7 @@ jobs:
           test -s dist/validation/Femgram-leg-pose-front.png
           test -s dist/validation/Femgram-leg-pose-rear.png
           test -s dist/validation/Femgram-leg-pose-side.png
-          python -c 'import json; d=json.load(open("dist/validation/Femgram-Rig-Validation.json")); assert "geometry_diagnostics" in d; assert "regional_skinning_weights" in d["geometry_diagnostics"]; assert "weight_edge_discontinuity" in d["geometry_diagnostics"]; assert "adaptive_surface_sample_counts" in d["geometry_diagnostics"]; assert any(k.endswith("_front") for k in d["geometry_diagnostics"]["regional_skinning_weights"]); assert any(v.get("status") == "ok" for v in d["geometry_diagnostics"]["adaptive_surface_sample_counts"].values())'
+          python -c 'import json; d=json.load(open("dist/validation/Femgram-Rig-Validation.json")); assert "geometry_diagnostics" in d; assert "regional_skinning_weights" in d["geometry_diagnostics"]; assert "weight_edge_discontinuity" in d["geometry_diagnostics"]; assert "adaptive_surface_sample_counts" in d["geometry_diagnostics"]; assert any(k.endswith("_front") for k in d["geometry_diagnostics"]["regional_skinning_weights"]); assert any(v.get("status") == "ok" for v in d["geometry_diagnostics"]["adaptive_surface_sample_counts"].values()); assert all(v["vertices"] >= 12 for v in d["geometry_diagnostics"]["adaptive_surface_sample_counts"].values() if v.get("status") == "ok")'
 
       - uses: actions/upload-artifact@v4
         with:
