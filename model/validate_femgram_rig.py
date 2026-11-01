@@ -267,8 +267,11 @@ bm.free()
 
 scene = bpy.context.scene
 scene.render.engine = "BLENDER_EEVEE_NEXT"
-scene.render.resolution_x = 900
-scene.render.resolution_y = 1100
+# Fast validation renders: the rig metrics still use the full 75K mesh,
+# while preview images use fewer pixels and samples to avoid spending most
+# of the workflow time on redundant presentation renders.
+scene.render.resolution_x = 600
+scene.render.resolution_y = 800
 scene.render.resolution_percentage = 100
 scene.render.image_settings.file_format = "PNG"
 scene.render.image_settings.color_mode = "RGBA"
@@ -300,7 +303,7 @@ bg = world.node_tree.nodes.get("Background")
 bg.inputs["Color"].default_value = (0.16, 0.17, 0.20, 1.0)
 bg.inputs["Strength"].default_value = 0.35
 scene.render.engine = "BLENDER_EEVEE_NEXT"
-scene.eevee.taa_render_samples = 96
+scene.eevee.taa_render_samples = 20
 
 def aim(obj, target):
     obj.rotation_euler = (Vector(target) - obj.location).to_track_quat("-Z", "Y").to_euler()
@@ -418,8 +421,6 @@ def apply_joint(bone_name, angle):
 # Neutral
 reset_pose()
 render("Femgram-neutral", "front")
-render("Femgram-neutral-rear", "rear")
-render("Femgram-neutral-side", "left")
 
 # Stronger, multi-joint arm pose: shoulders lift and elbows bend.
 reset_pose()
@@ -429,7 +430,7 @@ for side, sign in (("L", 1), ("R", -1)):
 bpy.context.view_layer.update()
 arm_pose_positions = sampled_positions()
 arm_rms = math.sqrt(sum((arm_pose_positions[i] - neutral_positions[i]).length_squared for i in range(min(len(arm_pose_positions), len(neutral_positions)))) / min(len(arm_pose_positions), len(neutral_positions)))
-render("Femgram-arm-pose")
+# Arm deformation remains covered by numeric pose tests; skip its extra render.
 
 # Leg deformation tests are isolated per side. The previous simultaneous
 # opposite-direction test made the knees overlap in projection and obscured
@@ -444,8 +445,11 @@ def run_leg_pose(side, hip_angle, knee_angle, label):
     count = min(len(posed), len(neutral_positions))
     rms = math.sqrt(sum((posed[i] - neutral_positions[i]).length_squared
                         for i in range(count)) / max(1, count))
-    render("Femgram-leg-pose-" + label + "-front", "front")
-    render("Femgram-leg-pose-" + label + "-side", "left")
+    # Keep visual renders only for the isolated knee tests, which are the
+    # critical deformation target. Combined poses remain measured numerically.
+    if label.endswith("knee-only"):
+        render("Femgram-leg-pose-" + label + "-front", "front")
+        render("Femgram-leg-pose-" + label + "-side", "left")
     leg_pose_tests[label] = {
         "side": side, "hip_angle_radians": hip_angle,
         "knee_angle_radians": knee_angle, "rms_displacement": round(rms, 6)
@@ -462,9 +466,8 @@ reset_pose()
 apply_joint("ValveBiped.Bip01_L_Thigh", 0.30)
 apply_joint("ValveBiped.Bip01_L_Calf", -0.55)
 bpy.context.view_layer.update()
-render("Femgram-leg-pose-front", "front")
-render("Femgram-leg-pose-rear", "rear")
-render("Femgram-leg-pose-side", "left")
+# Legacy combined-pose preview renders omitted; the isolated knee renders above
+# provide the visual check without duplicating the same deformation views.
 
 
 # Bone-placement audit: export the actual rest-pose endpoints and render a visible
@@ -545,7 +548,7 @@ report = {
     "leg_pose_rms_displacement": round(leg_rms, 6),
     "leg_pose_tests": leg_pose_tests,
     "bone_rest_pose_world": bone_audit,
-    "renders": ["Femgram-bones-front.png", "Femgram-bones-side.png", "Femgram-neutral.png", "Femgram-neutral-rear.png", "Femgram-neutral-side.png", "Femgram-arm-pose.png", "Femgram-leg-pose-front.png", "Femgram-leg-pose-rear.png", "Femgram-leg-pose-side.png", "Femgram-leg-pose-left-front.png", "Femgram-leg-pose-left-side.png", "Femgram-leg-pose-right-front.png", "Femgram-leg-pose-right-side.png", "Femgram-leg-pose-left-knee-only-front.png", "Femgram-leg-pose-left-knee-only-side.png", "Femgram-leg-pose-right-knee-only-front.png", "Femgram-leg-pose-right-knee-only-side.png"],
+    "renders": ["Femgram-bones-front.png", "Femgram-bones-side.png", "Femgram-neutral.png", "Femgram-leg-pose-left-knee-only-front.png", "Femgram-leg-pose-left-knee-only-side.png", "Femgram-leg-pose-right-knee-only-front.png", "Femgram-leg-pose-right-knee-only-side.png"],
     "checks": {
         "mesh_and_armature_present": bool(meshes and arms),
         "all_vertices_weighted": weighted == len(verts),
