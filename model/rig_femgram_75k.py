@@ -21,10 +21,13 @@ for side_name, sign in (("L",1),("R",-1)):
                  and (q.z-lo[2])/h < 0.075]
     if not foot_points:
         raise RuntimeError("Could not locate "+side_name+" foot geometry")
+    # Use the foot-region centroid for the bone axis instead of the single
+    # most-forward vertex. The latter can be a stray toe/mesh spike and made
+    # the foot bone as long as the entire calf in the previous build.
     foot_targets[side_name]={
         "x": (sum(q.x for q in foot_points)/len(foot_points)-cx)/w,
         "z": (sum(q.z for q in foot_points)/len(foot_points)-lo[2])/h,
-        "toe_y": (min(q.y for q in foot_points)-cy)/d
+        "toe_y": (sum(q.y for q in foot_points)/len(foot_points)-cy)/d
     }
 # Match the armature object transform to the imported mesh. Bone positions are
 # authored in mesh world coordinates and converted to armature-local coordinates.
@@ -118,11 +121,12 @@ for v in mesh.data.vertices:
   # below it the calf owns them. At the joint itself both receive 50%.
   knee_blend=smoothstep(.235,.295,nz)
 
-  # The foot is a separate forward-facing region below the ankle. Its weights
-  # are prevented from leaking into the knee and shin.
-  low_foot=1.0-smoothstep(.055,.105,nz)
-  forward_foot=smoothstep(.015,.12,-((xw.y-cy)/d))
-  foot_blend=max(0.0,min(1.0,low_foot*forward_foot))
+  # The foot is a complete anatomical region, not only its front-facing
+  # surface. Applying a front/back gate split the rear foot between calf and
+  # foot bones and produced the large triangular stretch during knee flexion.
+  # Blend only through the ankle transition; the whole sole/toe region follows
+  # the Foot bone consistently on both front and rear surfaces.
+  foot_blend=1.0-smoothstep(.055,.105,nz)
 
   thigh_weight=knee_blend
   calf_weight=(1.0-knee_blend)*(1.0-foot_blend)
