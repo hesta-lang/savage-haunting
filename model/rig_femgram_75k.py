@@ -31,7 +31,9 @@ for s,sgn in (("L",1),("R",-1)):
  thigh=s+"_Thigh"; calf=s+"_Calf"; foot=s+"_Foot"
  add(thigh,p(sgn*.105,.49),p(sgn*.105,.265),"Pelvis")
  add(calf,p(sgn*.105,.265),p(sgn*.105,.075),thigh,True)
- # Center the foot chain on the measured foot mesh, then aim it forward\n # along the toe direction. Keep the tail above the sole instead of\n # extending diagonally below the floor.\n add(foot,p(sgn*.083,.075),p(sgn*.083,.045,-.46),calf,True)
+  # Center the foot chain on the measured foot mesh and aim it toward the toes.
+  # The toe direction is negative Y; keep the tail near the sole, not below it.
+  add(foot,p(sgn*.083,.075),p(sgn*.083,.045,-.46),calf,True)
  clav=s+"_Clavicle"; upper=s+"_UpperArm"; fore=s+"_Forearm"; hand=s+"_Hand"
  add(clav,p(sgn*.035,.70),p(sgn*.145,.70),"Spine2")
  add(upper,p(sgn*.145,.70),p(sgn*.315,.695),clav,True)
