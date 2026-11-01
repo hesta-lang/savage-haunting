@@ -36,7 +36,12 @@ jobs:
         run: |
           python3 -m pip install --user gdown
           mkdir -p input dist
-          ~/.local/bin/gdown --id "$DRIVE_ID" -O input/femgram-source.zip
+          ~/.local/bin/gdown "https://drive.google.com/uc?id=${DRIVE_ID}" -O input/femgram-source.zip
+          if ! unzip -tq input/femgram-source.zip >/dev/null; then
+            echo "::error::The Google Drive file is not a valid ZIP. Provide the ID of the complete ZIP containing base_basic_pbr.fbx and the PNG textures, not the individual base.fbx file."
+            file input/femgram-source.zip || true
+            exit 1
+          fi
           unzip -q input/femgram-source.zip -d input/unpacked
           FBX="$(find input/unpacked -type f -name 'base_basic_pbr.fbx' -print -quit)"
           if [ -z "$FBX" ]; then
