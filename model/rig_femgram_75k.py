@@ -83,33 +83,23 @@ for v in mesh.data.vertices:
  leg_mask=max(0.0,min(1.0,lateral*vertical))
  if leg_mask > 0.001:
   leg_names=[side+"_Thigh",side+"_Calf",side+"_Foot"]
-  # Distances are measured in model space against the actual bone segments.
-  # A softened inverse-distance blend distributes influence across knees
-  # and ankles rather than switching weights at a fixed Z coordinate.
-  leg_dist=[(distseg(xw,*segmap[n]),n) for n in leg_names]
-  # Distance blending alone let the forward-projecting foot bone pull on
-  # the front of the calf, and let the calf bleed too far into the upper thigh.
-  # Add smooth anatomical height gates before normalization. The overlap bands
-  # remain gradual at the knee and ankle to avoid hard weight seams.
-  # Blend the two bones evenly through the knee joint, then keep the
-  # calf dominant through the shin. Concentrate the calf/foot handoff at
-  # the ankle so the long forward foot bone cannot pull on the lower calf.
-  knee_blend=smoothstep(.225,.305,nz)
-  ankle_blend=smoothstep(.052,.098,nz)
+  # Use the anatomical height gates as the primary leg weights.
+  # Distance-to-segment weighting was overpowering the knee/ankle gates:
+  # the long forward foot bone pulled on the shin and the calf dominated
+  # the knee even where the intended blend was 50/50. The leg mask already
+  # isolates each exposed leg from the skirt/torso, so a smooth height blend
+  # gives predictable joint transitions without changing the source mesh.
+  knee_blend=smoothstep(.205,.325,nz)
+  ankle_blend=smoothstep(.035,.115,nz)
   leg_gates={
    side+"_Thigh": knee_blend,
    side+"_Calf": (1.0-knee_blend)*ankle_blend,
    side+"_Foot": 1.0-ankle_blend
   }
-  leg_vals=[(n,(1.0/((dist+0.018)**4.0))*leg_gates[n]) for dist,n in leg_dist]
-  leg_total=sum(weight for n,weight in leg_vals)
-  if leg_total > 1e-12:
-   for n,weight in leg_vals:
-    if weight > 1e-12:
-     groups[n].add([v.index],leg_mask*weight/leg_total,"REPLACE")
-  else:
-   groups["Pelvis"].add([v.index],1.0,"REPLACE")
-   continue
+  leg_total=sum(leg_gates.values())
+  for n,weight in leg_gates.items():
+   if weight > 1e-12:
+    groups[n].add([v.index],leg_mask*weight/leg_total,"REPLACE")
   groups["Pelvis"].add([v.index],1.0-leg_mask,"REPLACE")
   continue
  candidates=allowed_bones(nx,nz)
