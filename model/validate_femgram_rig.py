@@ -181,6 +181,40 @@ for side_name, side_test in (
             "status": "ok"
         }
 
+# Measure the actual foot/ankle mesh geometry per side before changing bone placement.
+# The lower 7.5% height band is the existing ankle/foot diagnostic zone.
+foot_geometry_measurements = {}
+for side_name, side_test, prefix in (
+    ("left", lambda v: nx(v) > 0.025, "L"),
+    ("right", lambda v: nx(v) < -0.025, "R")
+):
+    foot_vertices = [v for v in verts if side_test(v) and nz(v) < 0.075]
+    points = [mesh.matrix_world @ v.co for v in foot_vertices]
+    if points:
+        foot_lo = [min(p[i] for p in points) for i in range(3)]
+        foot_hi = [max(p[i] for p in points) for i in range(3)]
+        foot_center = [sum(p[i] for p in points) / len(points) for i in range(3)]
+        foot_geometry_measurements[side_name] = {
+            "vertex_count": len(points),
+            "bounds_world": {
+                "min_x_y_z": [round(float(x), 6) for x in foot_lo],
+                "max_x_y_z": [round(float(x), 6) for x in foot_hi]
+            },
+            "dimensions_x_y_z": [round(float(foot_hi[i]-foot_lo[i]), 6) for i in range(3)],
+            "centroid_x_y_z": [round(float(x), 6) for x in foot_center],
+            "toe_direction": "negative_Y (front-facing model axis)",
+            "ankle_bone_head_world": [round(float(x), 6) for x in (arm.matrix_world @ arm.data.bones["ValveBiped.Bip01_" + prefix + "_Foot"].head_local)],
+            "foot_bone_tail_world": [round(float(x), 6) for x in (arm.matrix_world @ arm.data.bones["ValveBiped.Bip01_" + prefix + "_Foot"].tail_local)]
+        }
+if "left" in foot_geometry_measurements and "right" in foot_geometry_measurements:
+    lc = foot_geometry_measurements["left"]["centroid_x_y_z"]
+    rc = foot_geometry_measurements["right"]["centroid_x_y_z"]
+    foot_geometry_measurements["pair"] = {
+        "centroid_separation_x": round(abs(lc[0] - rc[0]), 6),
+        "centroid_separation_xyz": round(math.sqrt(sum((lc[i]-rc[i])**2 for i in range(3))), 6),
+        "left_right_centroid_delta_xyz": [round(lc[i]-rc[i], 6) for i in range(3)]
+    }
+
 focus_groups = [n for n in group_names if any(
     token in n.lower() for token in ("pelvis", "thigh", "calf", "foot"))]
 regions.update(adaptive_surface_regions)
@@ -485,6 +519,7 @@ report = {
     "missing_expected_bones": missing, "armature_modifier_linked": bool(arm_mods),
     "vertex_groups": len(mesh.vertex_groups),
     "geometry_diagnostics": geometry_diagnostics,
+    "foot_geometry_measurements": foot_geometry_measurements,
     "pose_tests": pose_tests,
     "arm_pose_rms_displacement": round(arm_rms, 6),
     "leg_pose_rms_displacement": round(leg_rms, 6),
