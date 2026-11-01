@@ -183,7 +183,8 @@ for side_name, side_test in (
 
 focus_groups = [n for n in group_names if any(
     token in n.lower() for token in ("pelvis", "thigh", "calf", "foot"))]
-regions.update(adaptive_surface_regions)\nregion_weight_summary = {}
+regions.update(adaptive_surface_regions)
+region_weight_summary = {}
 for region, predicate in regions.items():
     indices = [v.index for v in verts if predicate(v)]
     totals = defaultdict(float)
