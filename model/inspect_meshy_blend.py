@@ -210,11 +210,11 @@ try:
     scene.render.film_transparent = False
     scene.view_settings.view_transform = "AgX"
 
+    from mathutils import Vector
     render_meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
     corners = [o.matrix_world @ Vector(corner) for o in render_meshes for corner in o.bound_box]
     if not corners:
         raise RuntimeError("No mesh bounds available for preview render")
-    from mathutils import Vector
     mins = Vector((min(v.x for v in corners), min(v.y for v in corners), min(v.z for v in corners)))
     maxs = Vector((max(v.x for v in corners), max(v.y for v in corners), max(v.z for v in corners)))
     center = (mins + maxs) * 0.5
