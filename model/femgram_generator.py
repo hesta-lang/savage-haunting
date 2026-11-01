@@ -93,6 +93,31 @@ def leaf_ear(name, x, z, lean, material, inner=False):
     ob.modifiers.new("Ear smoothing","SUBSURF").levels=2
     return ob
 
+def bent_ear(name, material, inner=False):
+    # Right ear: rises from the head, then folds outward instead of standing upright.
+    rows, cols = 32, 24
+    verts, faces = [], []
+    for j in range(rows + 1):
+        t = j / rows
+        fold = max(0.0, (t - 0.66) / 0.34)
+        cx = 0.43 + 0.10*t + 0.47*fold
+        cz = 6.02 + 1.42*t - 0.42*fold
+        width = (0.145 if inner else 0.29) * (math.sin(math.pi*(t*0.94+0.03))**0.72)
+        depth = 0.035 if inner else 0.105
+        for i in range(cols):
+            a = 2*math.pi*i/cols
+            verts.append((cx + width*math.cos(a), -0.13-depth*math.sin(a), cz))
+    for j in range(rows):
+        for i in range(cols):
+            a=j*cols+i; b=j*cols+(i+1)%cols
+            faces.append((a,b,b+cols,a+cols))
+    me=bpy.data.meshes.new(name+"_Mesh")
+    me.from_pydata(verts,[],faces); me.materials.append(material); me.update()
+    ob=bpy.data.objects.new(name,me); bpy.context.collection.objects.link(ob)
+    for p in me.polygons: p.use_smooth=True
+    ob.modifiers.new("Folded ear smoothing","SUBSURF").levels=2
+    return ob
+
 def curve_tube(name, points, bevel, material):
     c = bpy.data.curves.new(name, 'CURVE')
     c.dimensions = '3D'
@@ -140,16 +165,17 @@ def build():
     # One upright ear and one folded forward ear, with black inner surfaces.
     leaf_ear("Ear_L", -0.42, 6.03, -0.08, WHITE)
     leaf_ear("Ear_inner_L", -0.42, 6.13, -0.08, BLACK, True)
-    leaf_ear("Ear_R", 0.43, 6.02, 0.10, WHITE)
-    leaf_ear("Ear_inner_R", 0.43, 6.12, 0.10, BLACK, True)
-    # Folded ear tip mesh as a curved tapered flap.
-    loft_mesh("Folded_Ear_Tip", [(7.08,0.60,-0.04,0.10,0.10),(7.18,0.66,-0.05,0.22,0.12),(7.29,0.78,-0.04,0.28,0.10),(7.34,0.88,-0.02,0.12,0.07)], WHITE, 40)
+    bent_ear("Ear_R_Folded", WHITE)
+    bent_ear("Ear_inner_R_Folded", BLACK, True)
 
     
 
         # Long layered white hairstyle: crown, swept fringe, side locks and back curtain.
     loft_mesh("Hair_Cap", [(5.78,0,0.08,0.62,0.48),(5.94,0,0.08,0.76,0.55),(6.12,0,0.08,0.73,0.55),(6.27,0,0.07,0.53,0.43),(6.34,0,0.06,0.12,0.12)], WHITE,64)
-    loft_mesh("Swept_Fringe", [(5.38,0.24,-0.56,0.20,0.10),(5.52,0.20,-0.59,0.38,0.13),(5.72,0.10,-0.58,0.60,0.16),(5.94,-0.06,-0.49,0.66,0.17),(6.12,-0.12,-0.34,0.38,0.14)], WHITE,64)
+    # Separate tapered bangs preserve the two visible eyes; avoid one oversized blob.
+    loft_mesh("Bang_Left", [(5.48,-0.34,-0.58,0.09,0.08),(5.62,-0.31,-0.60,0.17,0.10),(5.82,-0.25,-0.56,0.20,0.11),(6.04,-0.12,-0.40,0.15,0.10),(6.16,-0.08,-0.22,0.05,0.06)], WHITE,48)
+    loft_mesh("Bang_Center", [(5.55,0.02,-0.61,0.08,0.07),(5.72,0.03,-0.61,0.15,0.10),(5.92,0.02,-0.53,0.16,0.11),(6.12,0.02,-0.34,0.07,0.07)], WHITE,48)
+    loft_mesh("Bang_Right", [(5.55,0.34,-0.56,0.07,0.07),(5.70,0.32,-0.58,0.13,0.09),(5.88,0.26,-0.51,0.16,0.10),(6.08,0.17,-0.32,0.07,0.06)], WHITE,48)
     loft_mesh("Hair_Lock_Left", [(2.18,-0.88,-0.20,0.12,0.15),(2.48,-0.94,-0.20,0.23,0.19),(3.05,-0.98,-0.18,0.31,0.22),(3.75,-0.96,-0.16,0.34,0.24),(4.45,-0.88,-0.14,0.33,0.24),(5.12,-0.74,-0.12,0.30,0.22),(5.60,-0.62,-0.08,0.24,0.18)], WHITE,64)
     loft_mesh("Hair_Lock_Right", [(2.18,0.88,-0.20,0.12,0.15),(2.48,0.94,-0.20,0.23,0.19),(3.05,0.98,-0.18,0.31,0.22),(3.75,0.96,-0.16,0.34,0.24),(4.45,0.88,-0.14,0.33,0.24),(5.12,0.74,-0.12,0.30,0.22),(5.60,0.62,-0.08,0.24,0.18)], WHITE,64)
     loft_mesh("Back_Hair", [(2.25,0,0.35,0.10,0.13),(2.65,0,0.35,0.54,0.22),(3.35,0,0.34,0.86,0.27),(4.2,0,0.32,0.90,0.28),(5.0,0,0.28,0.78,0.25),(5.72,0,0.20,0.60,0.20)], WHITE,64)
@@ -183,9 +209,9 @@ def build():
     for side, label in [(-1,"L"),(1,"R")]:
         loft_mesh("Sleeve_"+label, [
             (2.70,side*1.00,-0.01,0.18,0.20),(2.82,side*1.08,-0.01,0.28,0.28),
-            (3.12,side*1.08,-0.01,0.38,0.34),(3.42,side*0.90,-0.01,0.36,0.34),
-            (3.72,side*0.76,-0.01,0.30,0.30),(4.02,side*0.69,-0.01,0.25,0.26),
-            (4.18,side*0.67,-0.01,0.22,0.22)
+            (3.12,side*0.99,-0.01,0.30,0.29),(3.42,side*0.87,-0.01,0.29,0.28),
+            (3.72,side*0.76,-0.01,0.25,0.25),(4.02,side*0.69,-0.01,0.22,0.23),
+            (4.18,side*0.67,-0.01,0.19,0.20)
         ], GRAY,56)
         loft_mesh("Cuff_"+label, [(2.68,side*1.00,-0.01,0.20,0.21),(2.78,side*1.00,-0.01,0.21,0.22)], MIDGRAY,40)
         loft_mesh("Hand_"+label, [(2.52,side*1.04,-0.10,0.10,0.11),(2.62,side*1.04,-0.12,0.17,0.15),(2.72,side*1.04,-0.10,0.15,0.14)], WHITE,40)
