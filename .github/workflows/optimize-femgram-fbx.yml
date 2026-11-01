@@ -59,13 +59,34 @@ jobs:
           mkdir -p dist/source-package
           cp -R input/unpacked/. dist/source-package/
 
-      - name: Render optimized model preview
+      - name: Render original and optimized models with matching preview settings
         run: |
-          /tmp/blender-4.4.3-linux-x64/blender --background --factory-startup --python model/render_femgram_preview.py -- "$PWD/dist/Femgram-Lite-100K.fbx" "$PWD/dist/Femgram-Lite-100K-render.png"
+          set -e
+          BLENDER=/tmp/blender-4.4.3-linux-x64/blender
+          "$BLENDER" --background --factory-startup --python model/render_femgram_preview.py -- "$SOURCE_FBX" "$PWD/dist/Femgram-Original-render.png"
+          "$BLENDER" --background --factory-startup --python model/render_femgram_preview.py -- "$PWD/dist/Femgram-Lite-100K.fbx" "$PWD/dist/Femgram-Lite-100K-render.png"
+          test -s dist/Femgram-Original-render.png
           test -s dist/Femgram-Lite-100K-render.png
+          python3 -m pip install --user pillow
+          python3 - <<'PY'
+          from PIL import Image, ImageOps, ImageDraw
+          original = Image.open("dist/Femgram-Original-render.png").convert("RGB")
+          optimized = Image.open("dist/Femgram-Lite-100K-render.png").convert("RGB")
+          if original.size != optimized.size:
+              raise SystemExit(f"Render dimensions differ: {original.size} vs {optimized.size}")
+          pad, label_h = 24, 54
+          canvas = Image.new("RGB", (original.width * 2 + pad * 3, original.height + label_h + pad * 2), (24, 24, 24))
+          draw = ImageDraw.Draw(canvas)
+          draw.text((pad, pad), "ORIGINAL · SOURCE FBX", fill=(245, 245, 245))
+          draw.text((original.width + pad * 2, pad), "OPTIMIZED · 100K VERTICES", fill=(245, 245, 245))
+          y = pad + label_h
+          canvas.paste(original, (pad, y))
+          canvas.paste(optimized, (original.width + pad * 2, y))
+          canvas.save("dist/Femgram-Original-vs-100K.png", quality=95)
+          print("COMPARISON_RENDER=dist/Femgram-Original-vs-100K.png")
+          PY
 
-      - name: Upload optimized FBX, textures, report and render
-
+      - name: Upload optimized FBX, textures, report and comparison renders
         uses: actions/upload-artifact@v4
         with:
           name: Femgram-Lite-Optimized
@@ -73,6 +94,8 @@ jobs:
             dist/Femgram-Lite-100K.fbx
             dist/Femgram-Lite-100K-report.json
             dist/Femgram-Lite-100K-render.png
+            dist/Femgram-Original-render.png
+            dist/Femgram-Original-vs-100K.png
             dist/source-package/
           if-no-files-found: error
           retention-days: 30
