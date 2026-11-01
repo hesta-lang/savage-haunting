@@ -28,7 +28,7 @@ jobs:
           name: Femgram-Lite-Optimized
           path: dist/optimized
           repository: hesta-lang/savage-haunting
-          run-id: ${{ inputs.artifact_run_id }}
+          run-id: ${{ inputs.artifact_run_id || '41315502143' }}
           github-token: ${{ github.token }}
       - name: Find FBX
         id: model
