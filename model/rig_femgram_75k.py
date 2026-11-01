@@ -91,10 +91,15 @@ for v in mesh.data.vertices:
   # the front of the calf, and let the calf bleed too far into the upper thigh.
   # Add smooth anatomical height gates before normalization. The overlap bands
   # remain gradual at the knee and ankle to avoid hard weight seams.
+  # Blend the two bones evenly through the knee joint, then keep the
+  # calf dominant through the shin. Concentrate the calf/foot handoff at
+  # the ankle so the long forward foot bone cannot pull on the lower calf.
+  knee_blend=smoothstep(.225,.305,nz)
+  ankle_blend=smoothstep(.052,.098,nz)
   leg_gates={
-   side+"_Thigh": smoothstep(.245,.340,nz),
-   side+"_Calf": smoothstep(.045,.115,nz)*(1.0-smoothstep(.265,.345,nz)),
-   side+"_Foot": 1.0-smoothstep(.055,.140,nz)
+   side+"_Thigh": knee_blend,
+   side+"_Calf": (1.0-knee_blend)*ankle_blend,
+   side+"_Foot": 1.0-ankle_blend
   }
   leg_vals=[(n,(1.0/((dist+0.018)**4.0))*leg_gates[n]) for dist,n in leg_dist]
   leg_total=sum(weight for n,weight in leg_vals)
