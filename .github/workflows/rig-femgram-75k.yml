@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/rig-femgram-75k.yml"
+      - "model/rig_femgram_75k.py"
   workflow_dispatch:
     inputs:
       artifact_run_id:
