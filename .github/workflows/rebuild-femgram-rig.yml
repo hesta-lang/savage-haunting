@@ -88,10 +88,10 @@ jobs:
           test -s dist/validation/Femgram-Rig-Validation.json
           test -s dist/validation/Femgram-bones-front.png
           test -s dist/validation/Femgram-bones-side.png
-          test -s dist/validation/Femgram-leg-pose-front.png
-          test -s dist/validation/Femgram-leg-pose-left-front.png
-          test -s dist/validation/Femgram-leg-pose-right-front.png
+          test -s dist/validation/Femgram-neutral.png
+          test -s dist/validation/Femgram-leg-pose-left-knee-only-front.png
           test -s dist/validation/Femgram-leg-pose-left-knee-only-side.png
+          test -s dist/validation/Femgram-leg-pose-right-knee-only-front.png
           test -s dist/validation/Femgram-leg-pose-right-knee-only-side.png
 
       - name: Upload corrected rigged FBX
