@@ -1,0 +1,49 @@
+name: Inspect Femgram rig for Garry's Mod
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_blend:
+        description: Blender file to inspect (relative to repository root)
+        required: true
+        default: model/source/Meshy_AI_Moonlit_Snowhare_20261101_generate.blend
+        type: choice
+        options:
+          - model/source/Meshy_AI_Moonlit_Snowhare_20261101_generate.blend
+          - model/source/Femgram-Meshy-Textured.blend
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-rig:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout beta branch
+        uses: actions/checkout@v4
+        with:
+          ref: beta/gmod-addon
+
+      - name: Install Blender runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libgles2 libgbm1 libx11-6 libxi6 libxrender1 libxxf86vm1 libxfixes3 libxkbcommon0
+          curl -fL --retry 3 https://download.blender.org/release/Blender4.4/blender-4.4.3-linux-x64.tar.xz -o /tmp/blender.tar.xz
+          tar -xJf /tmp/blender.tar.xz -C /tmp
+
+      - name: Inspect armature, weights, meshes and materials
+        env:
+          SOURCE_BLEND: ${{ inputs.source_blend }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          REPORT_PATH="$PWD/dist/femgram-rig-inspection.json" /tmp/blender-4.4.3-linux-x64/blender --background "$SOURCE_BLEND" --python model/inspect_gmod_rig.py
+          test -s dist/femgram-rig-inspection.json
+
+      - name: Upload inspection report
+        uses: actions/upload-artifact@v4
+        with:
+          name: Femgram-GMod-Rig-Inspection
+          path: dist/femgram-rig-inspection.json
+          if-no-files-found: error
+          retention-days: 30
