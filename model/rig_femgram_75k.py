@@ -33,7 +33,7 @@ for s,sgn in (("L",1),("R",-1)):
  add(calf,p(sgn*.105,.265),p(sgn*.105,.075),thigh,True)
  # Center the foot chain on the measured foot mesh and aim it toward the toes.
  # The toe direction is negative Y; keep the tail near the sole, not below it.
- add(foot,p(sgn*.083,.075),p(sgn*.083,.045,-.46),calf,True)
+ add(foot,p(sgn*.083,.075),p(sgn*.083,.045,-.30),calf,True)
  clav=s+"_Clavicle"; upper=s+"_UpperArm"; fore=s+"_Forearm"; hand=s+"_Hand"
  add(clav,p(sgn*.035,.70),p(sgn*.145,.70),"Spine2")
  add(upper,p(sgn*.145,.70),p(sgn*.315,.695),clav,True)
@@ -96,8 +96,8 @@ for v in mesh.data.vertices:
   # the knee even where the intended blend was 50/50. The leg mask already
   # isolates each exposed leg from the skirt/torso, so a smooth height blend
   # gives predictable joint transitions without changing the source mesh.
-  knee_blend=smoothstep(.205,.325,nz)
-  ankle_blend=smoothstep(.035,.115,nz)
+  knee_blend=smoothstep(.16,.37,nz)
+  ankle_blend=smoothstep(.025,.13,nz)
   leg_gates={
    side+"_Thigh": knee_blend,
    side+"_Calf": (1.0-knee_blend)*ankle_blend,
