@@ -58,6 +58,8 @@ jobs:
           set -euo pipefail
           /tmp/blender-4.4.3-linux-x64/blender --background --python model/validate_femgram_rig.py
           test -s dist/validation/Femgram-Rig-Validation.json
+          test -s dist/validation/Femgram-bones-front.png
+          test -s dist/validation/Femgram-bones-side.png
           test -s dist/validation/Femgram-neutral.png
           test -s dist/validation/Femgram-neutral-rear.png
           test -s dist/validation/Femgram-neutral-side.png
