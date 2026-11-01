@@ -1,15 +1,16 @@
-name: Inspect and export Femgram Meshy Blend
+name: Build textured Femgram Meshy model
 
 on:
   workflow_dispatch:
   push:
     paths:
       - "model/source/**"
+      - "model/textures/**"
       - "model/inspect_meshy_blend.py"
       - ".github/workflows/build-model.yml"
 
 jobs:
-  inspect-and-export:
+  inspect-and-texture:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -30,7 +31,7 @@ jobs:
           PYTAG="$(echo "$PYVER" | awk -F. '{print "cp" $1 $2}')"
           python3 -m pip install --disable-pip-version-check --target /tmp/blender-python-packages --only-binary=:all: --python-version "$PYVER" --implementation cp --abi "$PYTAG" "numpy==1.26.4"
 
-      - name: Find and inspect uploaded Meshy blend
+      - name: Find and process Meshy blend with PNG textures
         run: |
           set -e
           SOURCE="$(find model/source -maxdepth 1 -type f -name '*.blend' -print -quit)"
@@ -38,20 +39,19 @@ jobs:
             echo "No .blend file found in model/source"
             exit 1
           fi
-          echo "Using source: $SOURCE"
           mkdir -p dist
           export PYTHONPATH="/tmp/blender-python-packages:${PYTHONPATH:-}"
-          blender --background "$SOURCE" --python model/inspect_meshy_blend.py -- --output-dir "$PWD/dist"
-          test -s dist/Femgram-Meshy.blend
-          test -s dist/Femgram-Meshy.fbx
+          blender --background "$SOURCE" --python model/inspect_meshy_blend.py -- --output-dir "$PWD/dist" --texture-dir "$PWD/model/textures"
+          test -s dist/Femgram-Meshy-Textured.blend
+          test -s dist/Femgram-Meshy-Textured.fbx
           test -s dist/Femgram-Meshy-inspection.json
-          test -s dist/Femgram-Meshy-summary.txt
+          test -s dist/Femgram-Meshy-texture-summary.txt
           cp "$SOURCE" dist/Femgram-Meshy-original.blend
 
-      - name: Upload Meshy model artifacts
+      - name: Upload textured Meshy model artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Femgram-Meshy-Inspection
+          name: Femgram-Meshy-Textured
           path: dist/
           if-no-files-found: error
           retention-days: 30
