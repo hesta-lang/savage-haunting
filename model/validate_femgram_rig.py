@@ -131,9 +131,59 @@ regions = {
     "torso": lambda v: 0.38 <= nz(v) <= 0.72,
     "upper_body": lambda v: nz(v) > 0.68
 }
+# Adaptive front/rear classification: global Y thresholds failed because the
+# character's leg depth occupies only a small fraction of the whole-body bounds.
+# For each side and anatomical height band, derive front/back cutoffs from that
+# band's own Y distribution. Front is the negative-Y direction used by the camera.
+adaptive_surface_regions = {}
+adaptive_surface_counts = {}
+height_bands = {
+    "upper_thigh": (0.29, 0.43),
+    "knee": (0.20, 0.29),
+    "calf": (0.075, 0.20),
+    "ankle_foot": (0.0, 0.075)
+}
+for side_name, side_test in (
+    ("left", lambda v: nx(v) > 0.025),
+    ("right", lambda v: nx(v) < -0.025)
+):
+    for band_name, (z_min, z_max) in height_bands.items():
+        candidates = [v for v in verts
+                      if side_test(v) and z_min <= nz(v) < z_max]
+        depths = sorted((mesh.matrix_world @ v.co).y for v in candidates)
+        if len(depths) < 12:
+            adaptive_surface_counts[side_name + "_" + band_name] = {
+                "vertices": len(depths), "status": "insufficient_samples"
+            }
+            continue
+        # Use 30th/70th percentiles so both surfaces remain well populated
+        # even when the leg is rotated or its depth is nonuniform.
+        front_cut = depths[int(0.30 * (len(depths) - 1))]
+        rear_cut = depths[int(0.70 * (len(depths) - 1))]
+        front_key = side_name + "_" + band_name + "_front"
+        rear_key = side_name + "_" + band_name + "_rear"
+        adaptive_surface_regions[front_key] = (
+            lambda v, test=side_test, low=z_min, high=z_max, cut=front_cut:
+                test(v) and low <= nz(v) < high
+                and (mesh.matrix_world @ v.co).y <= cut
+        )
+        adaptive_surface_regions[rear_key] = (
+            lambda v, test=side_test, low=z_min, high=z_max, cut=rear_cut:
+                test(v) and low <= nz(v) < high
+                and (mesh.matrix_world @ v.co).y >= cut
+        )
+        adaptive_surface_counts[side_name + "_" + band_name] = {
+            "vertices": len(depths),
+            "front_cut_y": round(front_cut, 6),
+            "rear_cut_y": round(rear_cut, 6),
+            "expected_front_samples": sum(1 for y in depths if y <= front_cut),
+            "expected_rear_samples": sum(1 for y in depths if y >= rear_cut),
+            "status": "ok"
+        }
+
 focus_groups = [n for n in group_names if any(
     token in n.lower() for token in ("pelvis", "thigh", "calf", "foot"))]
-region_weight_summary = {}
+regions.update(adaptive_surface_regions)\nregion_weight_summary = {}
 for region, predicate in regions.items():
     indices = [v.index for v in verts if predicate(v)]
     totals = defaultdict(float)
@@ -175,7 +225,7 @@ geometry_diagnostics = {
         "edges_l1_over_0_75": sum(1 for d in edge_diffs if d > 0.75),
         "edges_l1_over_1_25": sum(1 for d in edge_diffs if d > 1.25)
     },
-    "regional_skinning_weights": region_weight_summary
+    "adaptive_surface_sample_counts": adaptive_surface_counts,\n    "regional_skinning_weights": region_weight_summary
 }
 bm.free()
 
