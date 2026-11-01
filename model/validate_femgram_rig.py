@@ -351,17 +351,29 @@ def reset_pose():
 
 # Find the local rotation axis that actually moves the skinned mesh most for each joint.
 sample = list(range(0, len(verts), max(1, len(verts)//1800)))
-def sampled_positions():
+def sampled_positions(indices=None):
     bpy.context.view_layer.update()
     deps = bpy.context.evaluated_depsgraph_get()
     evaluated = mesh.evaluated_get(deps)
     evmesh = evaluated.to_mesh()
     try:
-        return [evaluated.matrix_world @ evmesh.vertices[i].co for i in sample if i < len(evmesh.vertices)]
+        selected = sample if indices is None else indices
+        return [evaluated.matrix_world @ evmesh.vertices[i].co
+                for i in selected if i < len(evmesh.vertices)]
     finally:
         evaluated.to_mesh_clear()
 
 def choose_axis(bone_name, angle):
+    # Measure vertices actually influenced by this joint. A uniform whole-body
+    # sample can miss a small limb group and falsely report zero deformation.
+    group = mesh.vertex_groups.get(bone_name)
+    indices = []
+    if group is not None:
+        indices = [v.index for v in verts
+                   if any(g.group == group.index and g.weight > 0.05 for g in v.groups)]
+    stride = max(1, len(indices) // 1800)
+    indices = indices[::stride] if indices else sample
+    base_positions = sampled_positions(indices)
     # Preserve earlier joint rotations while testing this joint's local axes.
     saved = {pb.name: pb.rotation_euler.copy() for pb in arm.pose.bones}
     best = (0.0, 0)
@@ -371,10 +383,10 @@ def choose_axis(bone_name, angle):
         if pb is None:
             continue
         pb.rotation_euler[axis] = angle
-        after = sampled_positions()
-        count = min(len(neutral_positions), len(after))
+        after = sampled_positions(indices)
+        count = min(len(base_positions), len(after))
         if count:
-            rms = math.sqrt(sum((after[i] - neutral_positions[i]).length_squared for i in range(count)) / count)
+            rms = math.sqrt(sum((after[i] - base_positions[i]).length_squared for i in range(count)) / count)
             if rms > best[0]:
                 best = (rms, axis)
     reset_pose()
@@ -382,7 +394,7 @@ def choose_axis(bone_name, angle):
         if name in arm.pose.bones:
             arm.pose.bones[name].rotation_euler = rotation
     bpy.context.view_layer.update()
-    return best
+    return best, len(indices)
 
 reset_pose()
 neutral_positions = sampled_positions()
@@ -391,9 +403,11 @@ def apply_joint(bone_name, angle):
     if bone_name not in arm.pose.bones:
         pose_tests[bone_name] = {"found": False, "rms_displacement": 0.0}
         return
-    rms, axis = choose_axis(bone_name, angle)
+    (rms, axis), sample_count = choose_axis(bone_name, angle)
     arm.pose.bones[bone_name].rotation_euler[axis] = angle
-    pose_tests[bone_name] = {"found": True, "chosen_local_axis": ["X", "Y", "Z"][axis], "rms_displacement": round(rms, 6)}
+    pose_tests[bone_name] = {"found": True, "chosen_local_axis": ["X", "Y", "Z"][axis],
+                             "rms_displacement": round(rms, 6),
+                             "influenced_sample_vertices": sample_count}
 
 # Neutral
 reset_pose()
