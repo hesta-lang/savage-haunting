@@ -70,13 +70,27 @@ for v in mesh.data.vertices:
  xw=mesh.matrix_world@v.co
  nx=(xw.x-cx)/w
  nz=(xw.z-lo[2])/h
+ ax=abs(nx)
+ # Explicit weights for exposed legs only; skirt and hair stay on the torso chain.
+ if nz < .405 and .055 <= ax <= .145:
+  side="L" if nx >= 0 else "R"
+  if nz >= .315:
+   vals=[(side+"_Thigh",0.88),("Pelvis",0.12)]
+  elif nz >= .245:
+   vals=[(side+"_Thigh",0.62),(side+"_Calf",0.38)]
+  elif nz >= .145:
+   vals=[(side+"_Calf",0.88),(side+"_Thigh",0.12)]
+  elif nz >= .085:
+   vals=[(side+"_Calf",0.62),(side+"_Foot",0.38)]
+  else:
+   vals=[(side+"_Foot",0.90),(side+"_Calf",0.10)]
+  for n,weight in vals:
+   groups[n].add([v.index],weight,"REPLACE")
+  continue
  candidates=allowed_bones(nx,nz)
  if not candidates: candidates=[n for n,a,b in segments]
  near=sorted((distseg(xw,*segmap[n]),n) for n in candidates)
- # Use two influences for the leg itself; reserve a third only for the
- # pelvis transition at the hip to prevent cross-joint smearing.
- limit=2 if nz < .435 and any(n.endswith(("_Thigh","_Calf","_Foot")) for n in candidates) else 3
- near=near[:limit]
+ near=near[:3]
  vals=[(n,1.0/((dist+0.045)**3.0)) for dist,n in near]
  total=sum(weight for n,weight in vals)
  for n,weight in vals:
