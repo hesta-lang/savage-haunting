@@ -87,10 +87,24 @@ for v in mesh.data.vertices:
   # A softened inverse-distance blend distributes influence across knees
   # and ankles rather than switching weights at a fixed Z coordinate.
   leg_dist=[(distseg(xw,*segmap[n]),n) for n in leg_names]
-  leg_vals=[(n,1.0/((dist+0.018)**4.0)) for dist,n in leg_dist]
+  # Distance blending alone let the forward-projecting foot bone pull on
+  # the front of the calf, and let the calf bleed too far into the upper thigh.
+  # Add smooth anatomical height gates before normalization. The overlap bands
+  # remain gradual at the knee and ankle to avoid hard weight seams.
+  leg_gates={
+   side+"_Thigh": smoothstep(.245,.340,nz),
+   side+"_Calf": smoothstep(.045,.115,nz)*(1.0-smoothstep(.265,.345,nz)),
+   side+"_Foot": 1.0-smoothstep(.055,.140,nz)
+  }
+  leg_vals=[(n,(1.0/((dist+0.018)**4.0))*leg_gates[n]) for dist,n in leg_dist]
   leg_total=sum(weight for n,weight in leg_vals)
-  for n,weight in leg_vals:
-   groups[n].add([v.index],leg_mask*weight/leg_total,"REPLACE")
+  if leg_total > 1e-12:
+   for n,weight in leg_vals:
+    if weight > 1e-12:
+     groups[n].add([v.index],leg_mask*weight/leg_total,"REPLACE")
+  else:
+   groups["Pelvis"].add([v.index],1.0,"REPLACE")
+   continue
   groups["Pelvis"].add([v.index],1.0-leg_mask,"REPLACE")
   continue
  candidates=allowed_bones(nx,nz)
