@@ -5,6 +5,7 @@ on:
     branches: [beta/gmod-addon]
     paths:
       - "model/rig_femgram_75k.py"
+      - "model/validate_femgram_rig.py"
       - ".github/workflows/rebuild-femgram-rig.yml"
   workflow_dispatch:
 
@@ -66,6 +67,10 @@ jobs:
           test -s dist/validation/Femgram-bones-front.png
           test -s dist/validation/Femgram-bones-side.png
           test -s dist/validation/Femgram-leg-pose-front.png
+          test -s dist/validation/Femgram-leg-pose-left-front.png
+          test -s dist/validation/Femgram-leg-pose-right-front.png
+          test -s dist/validation/Femgram-leg-pose-left-knee-only-side.png
+          test -s dist/validation/Femgram-leg-pose-right-knee-only-side.png
 
       - name: Upload corrected rigged FBX
         uses: actions/upload-artifact@v4
