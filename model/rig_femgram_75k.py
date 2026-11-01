@@ -50,7 +50,14 @@ def distseg(x,a,b):
 def allowed_bones(x,z):
  side="L" if x>=0 else "R"
  if z < .535:
-  return [n for n,a,b in segments if n in ("Pelvis","Spine") or ("_"+n.split("_")[-1] in ("Thigh","Calf","Foot") and n.startswith(side+"_"))]
+  # Keep pelvis/spine as transition influences, but explicitly include
+  # the matching side's lower-limb chain. The former expression compared
+  # "_Thigh" against "Thigh" and silently excluded every leg bone.
+  return [
+   n for n,a,b in segments
+   if n in ("Pelvis","Spine")
+   or (n.startswith(side+"_") and n.endswith(("_Thigh","_Calf","_Foot")))
+  ]
  if z > .785:
   return [n for n,a,b in segments if n in ("Neck","Head")]
  if z >= .615 and abs(x) > .115:
