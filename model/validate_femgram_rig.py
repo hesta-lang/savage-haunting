@@ -403,7 +403,11 @@ right_leg_rms = run_leg_pose("R", -0.30, 0.55, "right")
 left_knee_rms = run_leg_pose("L", 0.0, -0.65, "left-knee-only")
 right_knee_rms = run_leg_pose("R", 0.0, 0.65, "right-knee-only")
 leg_rms = max(left_leg_rms, right_leg_rms, left_knee_rms, right_knee_rms)
-# Keep the legacy names for consumers of earlier validation artifacts.
+# Keep legacy names as aliases of the isolated left-leg combined pose.
+reset_pose()
+apply_joint("ValveBiped.Bip01_L_Thigh", 0.30)
+apply_joint("ValveBiped.Bip01_L_Calf", -0.55)
+bpy.context.view_layer.update()
 render("Femgram-leg-pose-front", "front")
 render("Femgram-leg-pose-rear", "rear")
 render("Femgram-leg-pose-side", "left")
@@ -484,8 +488,9 @@ report = {
     "pose_tests": pose_tests,
     "arm_pose_rms_displacement": round(arm_rms, 6),
     "leg_pose_rms_displacement": round(leg_rms, 6),
+    "leg_pose_tests": leg_pose_tests,
     "bone_rest_pose_world": bone_audit,
-    "renders": ["Femgram-bones-front.png", "Femgram-bones-side.png", "Femgram-neutral.png", "Femgram-neutral-rear.png", "Femgram-neutral-side.png", "Femgram-arm-pose.png", "Femgram-leg-pose-front.png", "Femgram-leg-pose-rear.png", "Femgram-leg-pose-side.png"],
+    "renders": ["Femgram-bones-front.png", "Femgram-bones-side.png", "Femgram-neutral.png", "Femgram-neutral-rear.png", "Femgram-neutral-side.png", "Femgram-arm-pose.png", "Femgram-leg-pose-front.png", "Femgram-leg-pose-rear.png", "Femgram-leg-pose-side.png", "Femgram-leg-pose-left-front.png", "Femgram-leg-pose-left-side.png", "Femgram-leg-pose-right-front.png", "Femgram-leg-pose-right-side.png", "Femgram-leg-pose-left-knee-only-front.png", "Femgram-leg-pose-left-knee-only-side.png", "Femgram-leg-pose-right-knee-only-front.png", "Femgram-leg-pose-right-knee-only-side.png"],
     "checks": {
         "mesh_and_armature_present": bool(meshes and arms),
         "all_vertices_weighted": weighted == len(verts),
