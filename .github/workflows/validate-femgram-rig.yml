@@ -32,7 +32,7 @@ jobs:
           name: Femgram-75K-ValveBiped-Rigged
           path: dist/rigged
           repository: hesta-lang/savage-haunting
-          run-id: ${{ inputs.rig_run_id || '41324226503' }}
+          run-id: ${{ inputs.rig_run_id || '41325420322' }}
           github-token: ${{ github.token }}
 
       - name: Locate FBX
