@@ -51,6 +51,7 @@ jobs:
           set -e
           /tmp/blender-4.4.3-linux-x64/blender --background --factory-startup --python model/optimize_femgram_fbx.py -- "$SOURCE_FBX" "$PWD/dist/Femgram-Lite-150K.fbx" "${{ inputs.target_vertices }}"
           test -s dist/Femgram-Lite-150K.fbx
+          mkdir -p dist/source-package
           cp -R input/unpacked/. dist/source-package/
 
       - name: Upload optimized FBX, textures and report
