@@ -109,10 +109,25 @@ def nz(v):
     return (norm_z(v) - lo[2]) / max(height, 1e-8)
 def nx(v):
     return ((norm_x(v) - (lo[0]+hi[0])*0.5) / max(width, 1e-8))
+def ny(v):
+    return ((mesh.matrix_world @ v.co).y - (lo[1] + hi[1]) * 0.5) / max(depth, 1e-8)
+
+# Finer spatial bins reveal which joint zone or surface carries unexpected
+# influence. These are approximate geometric regions, not semantic labels.
 regions = {
+    "left_upper_thigh": lambda v: 0.29 <= nz(v) < 0.43 and nx(v) > 0.025,
+    "left_knee": lambda v: 0.20 <= nz(v) < 0.29 and nx(v) > 0.025,
+    "left_calf": lambda v: 0.075 <= nz(v) < 0.20 and nx(v) > 0.025,
+    "left_ankle_foot": lambda v: nz(v) < 0.075 and nx(v) > 0.025,
+    "right_upper_thigh": lambda v: 0.29 <= nz(v) < 0.43 and nx(v) < -0.025,
+    "right_knee": lambda v: 0.20 <= nz(v) < 0.29 and nx(v) < -0.025,
+    "right_calf": lambda v: 0.075 <= nz(v) < 0.20 and nx(v) < -0.025,
+    "right_ankle_foot": lambda v: nz(v) < 0.075 and nx(v) < -0.025,
+    "left_front_leg": lambda v: nz(v) < 0.43 and nx(v) > 0.025 and ny(v) < -0.12,
+    "left_rear_leg": lambda v: nz(v) < 0.43 and nx(v) > 0.025 and ny(v) > 0.12,
+    "right_front_leg": lambda v: nz(v) < 0.43 and nx(v) < -0.025 and ny(v) < -0.12,
+    "right_rear_leg": lambda v: nz(v) < 0.43 and nx(v) < -0.025 and ny(v) > 0.12,
     "lower_body": lambda v: nz(v) < 0.48,
-    "left_lower_body": lambda v: nz(v) < 0.48 and nx(v) > 0.025,
-    "right_lower_body": lambda v: nz(v) < 0.48 and nx(v) < -0.025,
     "torso": lambda v: 0.38 <= nz(v) <= 0.72,
     "upper_body": lambda v: nz(v) > 0.68
 }
