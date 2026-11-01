@@ -1,4 +1,4 @@
-name: Validate Femgram ValveBiped rig (lighting and joint deformation)
+name: Validate Femgram ValveBiped rig (lower-body weighting pass)
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
       rig_run_id:
         description: Run ID that produced Femgram-75K-ValveBiped-Rigged
         required: true
-        default: "41321542214"
+        default: "41322322172"
         type: string
 
 permissions:
