@@ -1,28 +1,45 @@
-name: Inspect Femgram rig for Garry's Mod
+name: Inspect optimized Femgram 75K rig for Garry's Mod
 
 on:
   workflow_dispatch:
     inputs:
-      source_blend:
-        description: Blender file to inspect (relative to repository root)
+      artifact_run_id:
+        description: Run ID that produced Femgram-Lite-Optimized
         required: true
-        default: model/source/Meshy_AI_Moonlit_Snowhare_20261101_generate.blend
-        type: choice
-        options:
-          - model/source/Meshy_AI_Moonlit_Snowhare_20261101_generate.blend
-          - model/source/Femgram-Meshy-Textured.blend
+        default: "41315502143"
+        type: string
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
-  inspect-rig:
+  inspect-optimized-rig:
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout beta branch
+      - name: Checkout beta addon tools
         uses: actions/checkout@v4
         with:
           ref: beta/gmod-addon
+
+      - name: Download the approved optimized 75K artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Femgram-Lite-Optimized
+          path: dist/optimized
+          repository: hesta-lang/savage-haunting
+          run-id: ${{ inputs.artifact_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Locate optimized FBX
+        id: locate
+        shell: bash
+        run: |
+          set -euo pipefail
+          FBX="$(find dist/optimized -type f -name 'Femgram-Lite-75K.fbx' -print -quit)"
+          test -n "$FBX"
+          echo "fbx=$FBX" >> "$GITHUB_OUTPUT"
+          echo "Inspecting: $FBX"
 
       - name: Install Blender runtime libraries
         run: |
@@ -31,19 +48,19 @@ jobs:
           curl -fL --retry 3 https://download.blender.org/release/Blender4.4/blender-4.4.3-linux-x64.tar.xz -o /tmp/blender.tar.xz
           tar -xJf /tmp/blender.tar.xz -C /tmp
 
-      - name: Inspect armature, weights, meshes and materials
+      - name: Inspect optimized 75K FBX armature and weights
         env:
-          SOURCE_BLEND: ${{ inputs.source_blend }}
+          SOURCE_FBX: ${{ steps.locate.outputs.fbx }}
+          REPORT_PATH: ${{ github.workspace }}/dist/femgram-75k-rig-inspection.json
         run: |
           set -euo pipefail
-          mkdir -p dist
-          REPORT_PATH="$PWD/dist/femgram-rig-inspection.json" /tmp/blender-4.4.3-linux-x64/blender --background "$SOURCE_BLEND" --python model/inspect_gmod_rig.py
-          test -s dist/femgram-rig-inspection.json
+          /tmp/blender-4.4.3-linux-x64/blender --background --python model/inspect_gmod_fbx.py
+          test -s dist/femgram-75k-rig-inspection.json
 
-      - name: Upload inspection report
+      - name: Upload 75K rig inspection report
         uses: actions/upload-artifact@v4
         with:
-          name: Femgram-GMod-Rig-Inspection
-          path: dist/femgram-rig-inspection.json
+          name: Femgram-75K-GMod-Rig-Inspection
+          path: dist/femgram-75k-rig-inspection.json
           if-no-files-found: error
           retention-days: 30
