@@ -11,8 +11,13 @@ lo=[min(v[i] for v in vs) for i in range(3)]; hi=[max(v[i] for v in vs) for i in
 w,d,h=[hi[i]-lo[i] for i in range(3)]
 if h<max(w,d): raise RuntimeError("Expected Z-up model; bounds="+str((w,d,h)))
 cx=(lo[0]+hi[0])/2; cy=(lo[1]+hi[1])/2
-def p(x,z,y=0): return Vector((cx+x*w,cy+y*d,lo[2]+z*h))
+def p(x,z,y=0): return world_to_arm @ Vector((cx+x*w,cy+y*d,lo[2]+z*h))
+# Match the armature object transform to the imported mesh. Bone positions are
+# authored in mesh world coordinates and converted to armature-local coordinates.
+mesh_world=mesh.matrix_world.copy()
+world_to_arm=mesh_world.inverted_safe()
 ad=bpy.data.armatures.new("Femgram_ValveBiped"); arm=bpy.data.objects.new("Femgram_ValveBiped",ad); bpy.context.collection.objects.link(arm)
+arm.matrix_world=mesh_world
 bpy.context.view_layer.objects.active=arm; arm.select_set(True); bpy.ops.object.mode_set(mode="EDIT")
 eb={}; segments=[]
 def add(n,a,b,parent=None,connected=False):
@@ -65,7 +70,7 @@ def allowed_bones(x,z):
   if abs(x) < .405: names=[n for n in names if "Finger" not in n]
   return names
  return [n for n,a,b in segments if n in ("Pelvis","Spine","Spine1","Spine2","Neck","Head","L_Clavicle","R_Clavicle")]
-segmap={n:(a,b) for n,a,b in segments}
+segmap={n:(arm.matrix_world @ a,arm.matrix_world @ b) for n,a,b in segments}
 for v in mesh.data.vertices:
  xw=mesh.matrix_world@v.co
  nx=(xw.x-cx)/w
@@ -112,7 +117,9 @@ for v in mesh.data.vertices:
   groups[n].add([v.index],weight/total,"REPLACE")
 mod=mesh.modifiers.new("Femgram Armature","ARMATURE")
 mod.object=arm
+# Preserve the mesh world transform when parenting it to the armature.
 mesh.parent=arm
+mesh.matrix_parent_inverse=arm.matrix_world.inverted_safe()
 auto=False
 err="Using controlled anatomical region/side weights instead of automatic heat weights"
 # Normalize each vertex's influences.
