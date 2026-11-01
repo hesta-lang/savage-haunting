@@ -12,6 +12,20 @@ w,d,h=[hi[i]-lo[i] for i in range(3)]
 if h<max(w,d): raise RuntimeError("Expected Z-up model; bounds="+str((w,d,h)))
 cx=(lo[0]+hi[0])/2; cy=(lo[1]+hi[1])/2
 def p(x,z,y=0): return world_to_arm @ Vector((cx+x*w,cy+y*d,lo[2]+z*h))
+# Measure each actual foot region before creating bones. The foot tail is placed
+# at the mesh toe extremity rather than using an arbitrary whole-body depth.
+foot_targets={}
+for side_name, sign in (("L",1),("R",-1)):
+    foot_points=[q for q in vs
+                 if ((q.x-cx)/w)*sign > 0.025
+                 and (q.z-lo[2])/h < 0.075]
+    if not foot_points:
+        raise RuntimeError("Could not locate "+side_name+" foot geometry")
+    foot_targets[side_name]={
+        "x": (sum(q.x for q in foot_points)/len(foot_points)-cx)/w,
+        "z": (sum(q.z for q in foot_points)/len(foot_points)-lo[2])/h,
+        "toe_y": (min(q.y for q in foot_points)-cy)/d
+    }
 # Match the armature object transform to the imported mesh. Bone positions are
 # authored in mesh world coordinates and converted to armature-local coordinates.
 mesh_world=mesh.matrix_world.copy()
@@ -31,9 +45,10 @@ for s,sgn in (("L",1),("R",-1)):
  thigh=s+"_Thigh"; calf=s+"_Calf"; foot=s+"_Foot"
  add(thigh,p(sgn*.105,.49),p(sgn*.105,.265),"Pelvis")
  add(calf,p(sgn*.105,.265),p(sgn*.105,.075),thigh,True)
- # Center the foot chain on the measured foot mesh and aim it toward the toes.
- # The toe direction is negative Y; keep the tail near the sole, not below it.
- add(foot,p(sgn*.083,.075),p(sgn*.086,.045,-.24),calf,True)
+ # The ankle is exactly the calf endpoint. The short foot bone follows the
+ # measured ankle-to-toe direction and ends at the actual toe extremity.
+ target=foot_targets[s]
+ add(foot,p(sgn*.105,.075),p(target["x"],target["z"],target["toe_y"]),calf,True)
  clav=s+"_Clavicle"; upper=s+"_UpperArm"; fore=s+"_Forearm"; hand=s+"_Hand"
  add(clav,p(sgn*.035,.70),p(sgn*.145,.70),"Spine2")
  add(upper,p(sgn*.145,.70),p(sgn*.315,.695),clav,True)
