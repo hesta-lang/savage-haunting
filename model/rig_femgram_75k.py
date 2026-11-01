@@ -90,21 +90,19 @@ for v in mesh.data.vertices:
  leg_mask=max(0.0,min(1.0,lateral*vertical))
  if leg_mask > 0.001:
   leg_names=[side+"_Thigh",side+"_Calf",side+"_Foot"]
-  # Use the anatomical height gates as the primary leg weights.
-  # Distance-to-segment weighting was overpowering the knee/ankle gates:
-  # the long forward foot bone pulled on the shin and the calf dominated
-  # the knee even where the intended blend was 50/50. The leg mask already
-  # isolates each exposed leg from the skirt/torso, so a smooth height blend
-  # gives predictable joint transitions without changing the source mesh.
-  # Concentrate blending around the actual joint centers instead of spreading
-  # thigh influence across most of the leg. The knee is centered at z=.265
-  # and the ankle at z=.075 in the normalized source-mesh coordinates.
-  knee_blend=smoothstep(.235,.295,nz)
-  ankle_blend=smoothstep(.055,.095,nz)
+  # Blend thigh/calf around the measured knee height. Do not assign the
+  # entire region below the ankle to the foot: that made the shin rotate as
+  # part of the foot and produced the exaggerated forward kick in validation.
+  # The foot bone points forward along negative Y, so foot influence must also
+  # require a vertex to be both low and forward on the foot surface.
+  knee_blend=smoothstep(.225,.305,nz)
+  low_foot=1.0-smoothstep(.055,.115,nz)
+  forward_foot=smoothstep(.015,.12,-((xw.y-cy)/d))
+  foot_blend=max(0.0,min(1.0,low_foot*forward_foot))
   leg_gates={
    side+"_Thigh": knee_blend,
-   side+"_Calf": (1.0-knee_blend)*ankle_blend,
-   side+"_Foot": 1.0-ankle_blend
+   side+"_Calf": (1.0-knee_blend)*(1.0-foot_blend),
+   side+"_Foot": (1.0-knee_blend)*foot_blend
   }
   leg_total=sum(leg_gates.values())
   for n,weight in leg_gates.items():
