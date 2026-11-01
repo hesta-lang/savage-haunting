@@ -1,4 +1,4 @@
-name: Validate Femgram anatomical leg-weight rig topology, skinning and pose deformation
+name: Validate Femgram bone placement overlay and leg deformation
 
 on:
   push:
