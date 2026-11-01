@@ -172,8 +172,8 @@ render("Femgram-arm-pose")
 # Restore, then bend both hips and knees.
 reset_pose()
 for side, sign in (("L", 1), ("R", -1)):
-    apply_joint("ValveBiped.Bip01_" + side + "_Thigh", sign * 0.75)
-    apply_joint("ValveBiped.Bip01_" + side + "_Calf", -sign * 1.0)
+    apply_joint("ValveBiped.Bip01_" + side + "_Thigh", sign * 0.35)
+    apply_joint("ValveBiped.Bip01_" + side + "_Calf", -sign * 0.50)
 bpy.context.view_layer.update()
 leg_pose_positions = sampled_positions()
 leg_rms = math.sqrt(sum((leg_pose_positions[i] - neutral_positions[i]).length_squared for i in range(min(len(leg_pose_positions), len(neutral_positions)))) / min(len(leg_pose_positions), len(neutral_positions)))
