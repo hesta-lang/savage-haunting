@@ -123,6 +123,17 @@ if rough_choice:
     links.new(node.outputs["Color"], bsdf.inputs["Roughness"])
     assigned["roughness"] = rough_choice[1]["file"]
 
+# Create UV islands without changing the mesh geometry.
+for obj in [o for o in bpy.data.objects if o.type == "MESH"]:
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.select_all(action="DESELECT")
+    obj.select_set(True)
+    if len(obj.data.uv_layers) == 0:
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="SELECT")
+        bpy.ops.uv.smart_project(island_margin=0.015, correct_aspect=True, scale_to_bounds=False)
+        bpy.ops.object.mode_set(mode="OBJECT")
+
 # Use the material on the source mesh while preserving the original geometry.
 mesh_objects = [obj for obj in bpy.data.objects if obj.type == "MESH"]
 for obj in mesh_objects:
