@@ -373,12 +373,18 @@ def choose_axis(bone_name, angle):
                    if any(g.group == group.index and g.weight > 0.05 for g in v.groups)]
     stride = max(1, len(indices) // 1800)
     indices = indices[::stride] if indices else sample
-    base_positions = sampled_positions(indices)
-    # Preserve earlier joint rotations while testing this joint's local axes.
+    # Test each local axis against the same saved pose. Resetting without
+    # restoring the already-posed parent made child-joint axis tests compare
+    # different baselines and could report misleading deformation values.
     saved = {pb.name: pb.rotation_euler.copy() for pb in arm.pose.bones}
+    base_positions = sampled_positions(indices)
     best = (0.0, 0)
     for axis in range(3):
         reset_pose()
+        for name, rotation in saved.items():
+            if name in arm.pose.bones:
+                arm.pose.bones[name].rotation_euler = rotation
+        bpy.context.view_layer.update()
         pb = arm.pose.bones.get(bone_name)
         if pb is None:
             continue
