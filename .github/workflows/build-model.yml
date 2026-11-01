@@ -1,20 +1,21 @@
-name: Build Femgram Blender Model
+name: Inspect and export Femgram Meshy Blend
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - "model/**"
+      - "model/source/**"
+      - "model/inspect_meshy_blend.py"
       - ".github/workflows/build-model.yml"
 
 jobs:
-  build:
+  inspect-and-export:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Blender
+      - name: Install Blender and export dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y blender libegl1 libgl1 libgles2 libgbm1 python3-pip
@@ -27,25 +28,30 @@ jobs:
             exit 1
           fi
           PYTAG="$(echo "$PYVER" | awk -F. '{print "cp" $1 $2}')"
-          echo "Blender Python: $PYVER ($PYTAG)"
           python3 -m pip install --disable-pip-version-check --target /tmp/blender-python-packages --only-binary=:all: --python-version "$PYVER" --implementation cp --abi "$PYTAG" "numpy==1.26.4"
 
-      - name: Generate editable model and FBX
+      - name: Find and inspect uploaded Meshy blend
         run: |
+          set -e
+          SOURCE="$(find model/source -maxdepth 1 -type f -name '*.blend' -print -quit)"
+          if [ -z "$SOURCE" ]; then
+            echo "No .blend file found in model/source"
+            exit 1
+          fi
+          echo "Using source: $SOURCE"
           mkdir -p dist
           export PYTHONPATH="/tmp/blender-python-packages:${PYTHONPATH:-}"
-          blender --background --python model/femgram_generator.py
-          test -s /tmp/Femgram.blend
-          test -s /tmp/Femgram.fbx
-          test -s /tmp/Femgram-preview.png
-          cp /tmp/Femgram.blend dist/Femgram.blend
-          cp /tmp/Femgram.fbx dist/Femgram.fbx
-          cp /tmp/Femgram-preview.png dist/Femgram-preview.png
+          blender --background "$SOURCE" --python model/inspect_meshy_blend.py -- --output-dir "$PWD/dist"
+          test -s dist/Femgram-Meshy.blend
+          test -s dist/Femgram-Meshy.fbx
+          test -s dist/Femgram-Meshy-inspection.json
+          test -s dist/Femgram-Meshy-summary.txt
+          cp "$SOURCE" dist/Femgram-Meshy-original.blend
 
-      - name: Upload model artifact
+      - name: Upload Meshy model artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Femgram-3D-Source
+          name: Femgram-Meshy-Inspection
           path: dist/
           if-no-files-found: error
           retention-days: 30
