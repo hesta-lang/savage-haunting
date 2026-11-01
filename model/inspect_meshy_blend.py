@@ -196,3 +196,79 @@ with open(os.path.join(out_dir, "Femgram-Meshy-texture-summary.txt"), "w", encod
     f.write("Textures found: %d\n" % len(texture_records))
     for rec in texture_records:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+
+// Create preview renders only; camera and lights are not saved into the model.
+// The mesh, face, and texture coordinates are left untouched.
+try:
+    scene = bpy.context.scene
+    scene.render.engine = "BLENDER_EEVEE_NEXT"
+    scene.render.resolution_x = 1200
+    scene.render.resolution_y = 1600
+    scene.render.resolution_percentage = 100
+    scene.render.image_settings.file_format = "PNG"
+    scene.render.film_transparent = False
+    scene.view_settings.view_transform = "AgX"
+
+    render_meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
+    corners = [o.matrix_world @ Vector(corner) for o in render_meshes for corner in o.bound_box]
+    if not corners:
+        raise RuntimeError("No mesh bounds available for preview render")
+    from mathutils import Vector
+    mins = Vector((min(v.x for v in corners), min(v.y for v in corners), min(v.z for v in corners)))
+    maxs = Vector((max(v.x for v in corners), max(v.y for v in corners), max(v.z for v in corners)))
+    center = (mins + maxs) * 0.5
+    size = maxs - mins
+    radius = max(size.length * 0.5, 1.0)
+
+    world = scene.world or bpy.data.worlds.new("Femgram Preview World")
+    scene.world = world
+    world.use_nodes = True
+    world.node_tree.nodes["Background"].inputs["Color"].default_value = (0.055, 0.065, 0.085, 1)
+    world.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.45
+
+    cam_data = bpy.data.cameras.new("Femgram_Preview_Camera")
+    cam = bpy.data.objects.new("Femgram_Preview_Camera", cam_data)
+    scene.collection.objects.link(cam)
+    cam.data.lens = 52
+    cam.data.type = "ORTHO"
+    cam.data.ortho_scale = max(size.z * 1.16, size.x * 1.55, 1.0)
+    scene.camera = cam
+
+    lights = []
+    for name, offset, power, light_size in [
+        ("Preview_Key", Vector((1.8, -2.4, 2.2)), 1500, 5.0),
+        ("Preview_Fill", Vector((-2.0, -1.0, 0.5)), 900, 4.0),
+        ("Preview_Rim", Vector((0.5, 2.0, 1.6)), 1800, 3.0),
+    ]:
+        data = bpy.data.lights.new(name, "AREA")
+        data.energy = power
+        data.shape = "DISK"
+        data.size = light_size
+        obj = bpy.data.objects.new(name, data)
+        scene.collection.objects.link(obj)
+        obj.location = center + offset * radius
+        obj.rotation_euler = (center - obj.location).to_track_quat("-Z", "Y").to_euler()
+        lights.append(obj)
+
+    original_filepath = scene.render.filepath
+    for view_name, direction in [
+        ("Femgram-Render-Front.png", Vector((0, -1, 0))),
+        ("Femgram-Render-Reverse.png", Vector((0, 1, 0))),
+    ]:
+        cam.location = center + direction * radius * 3.2 + Vector((0, 0, size.z * 0.03))
+        cam.rotation_euler = (center - cam.location).to_track_quat("-Z", "Y").to_euler()
+        scene.render.filepath = os.path.join(out_dir, view_name)
+        bpy.ops.render.render(write_still=True)
+    scene.render.filepath = original_filepath
+
+    scene.camera = None
+    bpy.data.objects.remove(cam, do_unlink=True)
+    bpy.data.cameras.remove(cam_data)
+    for light_obj in lights:
+        light_data = light_obj.data
+        bpy.data.objects.remove(light_obj, do_unlink=True)
+        bpy.data.lights.remove(light_data)
+except Exception as exc:
+    with open(os.path.join(out_dir, "Femgram-render-error.txt"), "w", encoding="utf-8") as f:
+        f.write(str(exc))
