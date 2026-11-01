@@ -1,4 +1,4 @@
-name: Validate Femgram rig topology, skinning and pose deformation
+name: Validate Femgram gated-leg rig topology, skinning and pose deformation
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
       rig_run_id:
         description: Run ID that produced Femgram-75K-ValveBiped-Rigged
         required: true
-        default: "41325420322"
+        default: "41330245142"
         type: string
 
 permissions:
