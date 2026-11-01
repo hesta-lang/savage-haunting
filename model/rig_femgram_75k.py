@@ -96,8 +96,8 @@ for v in mesh.data.vertices:
   # the knee even where the intended blend was 50/50. The leg mask already
   # isolates each exposed leg from the skirt/torso, so a smooth height blend
   # gives predictable joint transitions without changing the source mesh.
-  knee_blend=smoothstep(.16,.37,nz)
-  ankle_blend=smoothstep(.025,.13,nz)
+  knee_blend=smoothstep(.12,.42,nz)
+  ankle_blend=smoothstep(.015,.16,nz)
   leg_gates={
    side+"_Thigh": knee_blend,
    side+"_Calf": (1.0-knee_blend)*ankle_blend,
