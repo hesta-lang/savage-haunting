@@ -1,6 +1,10 @@
 name: Validate Femgram ValveBiped rig
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/validate-femgram-rig.yml"
   workflow_dispatch:
     inputs:
       rig_run_id:
