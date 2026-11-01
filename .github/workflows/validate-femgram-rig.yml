@@ -59,8 +59,12 @@ jobs:
           /tmp/blender-4.4.3-linux-x64/blender --background --python model/validate_femgram_rig.py
           test -s dist/validation/Femgram-Rig-Validation.json
           test -s dist/validation/Femgram-neutral.png
+          test -s dist/validation/Femgram-neutral-rear.png
+          test -s dist/validation/Femgram-neutral-side.png
           test -s dist/validation/Femgram-arm-pose.png
-          test -s dist/validation/Femgram-leg-pose.png
+          test -s dist/validation/Femgram-leg-pose-front.png
+          test -s dist/validation/Femgram-leg-pose-rear.png
+          test -s dist/validation/Femgram-leg-pose-side.png
           python -c 'import json; d=json.load(open("dist/validation/Femgram-Rig-Validation.json")); assert "geometry_diagnostics" in d; assert "regional_skinning_weights" in d["geometry_diagnostics"]; assert "weight_edge_discontinuity" in d["geometry_diagnostics"]'
 
       - uses: actions/upload-artifact@v4
