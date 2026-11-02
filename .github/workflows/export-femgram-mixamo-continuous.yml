@@ -28,7 +28,7 @@ jobs:
           repository: ${{ github.repository }}
           run-id: ${{ inputs.source_run_id || '41385511641' }}
       - name: Install Blender
-        run: sudo apt-get update && sudo apt-get install -y blender
+        run: sudo apt-get update && sudo apt-get install -y blender python3-numpy
       - name: Locate source
         id: src
         run: |
@@ -36,6 +36,8 @@ jobs:
           test -n "$FILE"
           echo "file=$FILE" >> "$GITHUB_OUTPUT"
       - name: Export continuous surface
+        env:
+          PYTHONPATH: /usr/lib/python3/dist-packages
         run: |
           blender -b --python-exit-code 1 --python model/export_femgram_mixamo_continuous.py -- "${{ steps.src.outputs.file }}" "$RUNNER_TEMP/Femgram-Mixamo-Continuous.fbx"
       - name: Package
