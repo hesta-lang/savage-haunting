@@ -30,10 +30,11 @@ for side_name, sign in (("L",1),("R",-1)):
             sorted(q.y for q in samples)[len(samples)//2],
             sorted(q.z for q in samples)[len(samples)//2]
         ))
-# Measure the toe end from an actual mesh cross-section, using the same
-# component-wise median method as the knee/ankle pivots. A centroid of the
-# entire front 8% can be pulled downward by the sole and tilts the Foot bone;
-# a narrow front-most cross-section gives a stable anatomical toe endpoint.
+# Measure the toe endpoint from the actual upper/central toe surface.
+# The previous front-most quantile included underside/sole vertices and could
+# place the Foot tail below the foot mesh, tilting its long axis and making
+# local pitch rotation shear the entire sole. Restrict the cross-section to
+# the anatomical foot body above the sole, then use component-wise medians.
 foot_targets={}
 for side_name, sign in (("L",1),("R",-1)):
     foot_points=[q for q in vs
@@ -41,9 +42,16 @@ for side_name, sign in (("L",1),("R",-1)):
                  and (q.z-lo[2])/h < 0.075]
     if len(foot_points) < 20:
         raise RuntimeError("Insufficient "+side_name+" foot geometry: "+str(len(foot_points)))
-    front_depths=sorted(q.y for q in foot_points)
-    toe_cut=front_depths[max(0,int((len(front_depths)-1)*0.025))]
-    toe_points=[q for q in foot_points if q.y <= toe_cut]
+    toe_surface=[q for q in foot_points
+                 if 0.012 <= (q.z-lo[2])/h <= 0.065]
+    if len(toe_surface) < 20:
+        raise RuntimeError("Insufficient "+side_name+" upper toe surface: "+str(len(toe_surface)))
+    front_depths=sorted(q.y for q in toe_surface)
+    toe_cut=front_depths[max(0,int((len(front_depths)-1)*0.05))]
+    toe_points=[q for q in toe_surface if q.y <= toe_cut]
+    if len(toe_points) < 8:
+        toe_cut=front_depths[max(0,int((len(front_depths)-1)*0.10))]
+        toe_points=[q for q in toe_surface if q.y <= toe_cut]
     if len(toe_points) < 8:
         raise RuntimeError("Insufficient "+side_name+" toe cross-section: "+str(len(toe_points)))
     foot_targets[side_name]={
@@ -51,7 +59,8 @@ for side_name, sign in (("L",1),("R",-1)):
         "z": (sorted(q.z for q in toe_points)[len(toe_points)//2]-lo[2])/h,
         "toe_y": (sorted(q.y for q in toe_points)[len(toe_points)//2]-cy)/d,
         "toe_sample_vertices": len(toe_points),
-        "method": "component-wise median of front-most 2.5% toe cross-section"
+        "toe_surface_height_range": [0.012,0.065],
+        "method": "component-wise median of front-most 5% upper/central toe cross-section"
     }
 def normalized_joint_point(point):
     return p((point.x-cx)/w,(point.z-lo[2])/h,(point.y-cy)/d)
@@ -230,7 +239,7 @@ for v in mesh.data.vertices:
   # Stable anatomical partition: distance falloff must not overpower the
   # knee/ankle blend or pull the foot back onto the calf.
   knee_blend=smoothstep(.18,.34,nz)
-  foot_blend=1.0-smoothstep(.045,.120,nz)
+  foot_blend=1.0-smoothstep(.025,.145,nz)
   priors={
    side+"_Thigh": knee_blend,
    side+"_Calf": (1.0-knee_blend)*(1.0-foot_blend),
@@ -383,10 +392,10 @@ for side_name, sign in (("L", 1), ("R", -1)):
 # Smooth the Calf-to-Foot handoff on the connected ankle surface.
 # Work on the normalized Calf/Foot share only; preserve each vertex's total
 # lower-limb influence and leave Thigh/Pelvis and the source geometry untouched.
-ankle_transition_smoothing = {"left": [], "right": [], "iterations": 4, "factor": 0.30,
-                               "normalized_height_band": [0.045, 0.135],
-                               "foot_blend_height_range": [0.045, 0.120],
-                               "method": "widened calf-to-foot blend through the ankle joint, then topology smoothing"}
+ankle_transition_smoothing = {"left": [], "right": [], "iterations": 16, "factor": 0.35,
+                               "normalized_height_band": [0.025, 0.155],
+                               "foot_blend_height_range": [0.025, 0.145],
+                               "method": "broad calf-to-foot ankle transition with bilateral topology smoothing; preserves total limb weight"}
 for side_name, sign in (("L", 1), ("R", -1)):
     calf_name = "ValveBiped.Bip01_" + side_name + "_Calf"
     foot_name = "ValveBiped.Bip01_" + side_name + "_Foot"
@@ -395,9 +404,9 @@ for side_name, sign in (("L", 1), ("R", -1)):
         world = mesh.matrix_world @ vtx.co
         nx = (world.x - cx) / w
         nz = (world.z - lo[2]) / h
-        if nx * sign > 0.025 and 0.045 <= nz <= 0.135:
+        if nx * sign > 0.025 and 0.025 <= nz <= 0.155:
             weights = {group_index_to_name[g.group]: g.weight for g in vtx.groups}
-            if weights.get(calf_name, 0.0) + weights.get(foot_name, 0.0) > 0.50:
+            if weights.get(calf_name, 0.0) + weights.get(foot_name, 0.0) > 0.20:
                 eligible.add(vtx.index)
     # Smooth the Foot share over mesh-connected neighbors, not Euclidean
     # proximity, so nearby but disconnected surfaces cannot exchange weights.
