@@ -16,6 +16,12 @@ arm = next((o for o in scene.objects if o.type == "ARMATURE"), None)
 mesh = max((o for o in scene.objects if o.type == "MESH"), key=lambda o: len(o.data.vertices))
 if arm is None or len(mesh.data.vertices) != 75000:
     raise RuntimeError("Expected the 75K mesh and generated ValveBiped armature.")
+if len(mesh.data.edges) != 225000 or len(mesh.data.polygons) != 150000:
+    raise RuntimeError(
+        "Source topology changed: expected 75000 vertices / 225000 edges / "
+        "150000 faces, got %d / %d / %d" %
+        (len(mesh.data.vertices), len(mesh.data.edges), len(mesh.data.polygons))
+    )
 for side in ("L", "R"):
     name = "ValveBiped.Bip01_" + side + "_Calf"
     if arm.pose.bones.get(name) is None:
