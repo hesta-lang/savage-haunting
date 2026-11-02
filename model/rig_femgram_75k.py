@@ -193,7 +193,7 @@ for v in mesh.data.vertices:
  # follow different transforms when the calf/foot chain rotates, producing
  # the extreme edge stretch found in vertices 67549/67626 and 65656/65485.
  # Keep this envelope side-specific and narrow enough to exclude the torso.
- foot_lateral=smoothstep(.015,.032,ax)*(1.0-smoothstep(.185,.225,ax))
+ foot_lateral=smoothstep(.008,.018,ax)*(1.0-smoothstep(.205,.245,ax))
  foot_vertical=1.0-smoothstep(.040,.095,nz)
  foot_core=max(0.0,min(1.0,foot_lateral*foot_vertical))
  leg_mask=max(0.0,min(1.0,max(lateral*vertical,knee_core,proximity*vertical,foot_core)))
@@ -414,7 +414,7 @@ for v in mesh.data.vertices:
     world = mesh.matrix_world @ v.co
     nx = (world.x - cx) / w
     nz = (world.z - lo[2]) / h
-    if not (nz < 0.035 and 0.025 < abs(nx) < 0.20):
+    if not (nz < 0.035 and 0.010 < abs(nx) < 0.22):
         continue
     side = "L" if nx > 0 else "R"
     thigh_name = "ValveBiped.Bip01_" + side + "_Thigh"
@@ -565,6 +565,6 @@ for v in mesh.data.vertices:
 bpy.ops.object.select_all(action="DESELECT"); mesh.select_set(True); arm.select_set(True); bpy.context.view_layer.objects.active=arm
 dest=os.path.join(out,"Femgram-75K-ValveBiped-Rigged.fbx")
 bpy.ops.export_scene.fbx(filepath=dest,use_selection=True,object_types={"ARMATURE","MESH"},add_leaf_bones=False,bake_anim=False,path_mode="COPY",embed_textures=True,axis_forward="-Z",axis_up="Y")
-report={"vertices":len(mesh.data.vertices),"polygons":len(mesh.data.polygons),"bones":len(ad.bones),"vertex_groups":len(mesh.vertex_groups),"weighted_vertices":sum(bool(v.groups) for v in mesh.data.vertices),"knee_weight_repair":knee_weight_repair,"knee_transition_smoothing":knee_transition_smoothing,"foot_weight_repair":foot_weight_repair,"ankle_transition_smoothing":ankle_transition_smoothing,"ankle_weight_diagnostics":ankle_weight_diagnostics,"unweighted_vertices":sum(not v.groups for v in mesh.data.vertices),"automatic_weights":auto,"automatic_weights_error":err,"materials":[m.name if m else None for m in mesh.data.materials],"uv_layers":[u.name for u in mesh.data.uv_layers],"dimensions":[w,d,h],"warning":"Provisional proportion-based rig; validate deformation and Source-engine compatibility before release."}
+report={"vertices":len(mesh.data.vertices),"polygons":len(mesh.data.polygons),"bones":len(ad.bones),"vertex_groups":len(mesh.vertex_groups),"weighted_vertices":sum(bool(v.groups) for v in mesh.data.vertices),"knee_weight_repair":knee_weight_repair,"knee_transition_smoothing":knee_transition_smoothing,"foot_weight_repair":foot_weight_repair,"foot_cap_weight_lock":foot_cap_weight_lock,"ankle_transition_smoothing":ankle_transition_smoothing,"ankle_weight_diagnostics":ankle_weight_diagnostics,"unweighted_vertices":sum(not v.groups for v in mesh.data.vertices),"automatic_weights":auto,"automatic_weights_error":err,"materials":[m.name if m else None for m in mesh.data.materials],"uv_layers":[u.name for u in mesh.data.uv_layers],"dimensions":[w,d,h],"warning":"Provisional proportion-based rig; validate deformation and Source-engine compatibility before release."}
 with open(os.path.join(out,"Femgram-75K-Rig-Report.json"),"w") as f: json.dump(report,f,indent=2)
 print(json.dumps(report,indent=2))
