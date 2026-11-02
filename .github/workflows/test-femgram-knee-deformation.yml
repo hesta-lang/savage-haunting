@@ -21,7 +21,7 @@ jobs:
       - name: Checkout project
         uses: actions/checkout@v4
         with:
-          ref: beta/gmod-addon
+          ref: ${{ github.sha }}
 
       - name: Download original 75K source FBX
         uses: actions/download-artifact@v4
