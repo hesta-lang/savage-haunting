@@ -1,4 +1,4 @@
-import bpy, os, json, runpy, math
+import bpy, os, json, runpy, math, colorsys
 from mathutils import Vector
 from mathutils import Quaternion
 
@@ -35,17 +35,13 @@ groups = list(mesh.vertex_groups)
 if not groups:
     raise RuntimeError("No vertex groups were generated.")
 
-# Distinct, high-contrast palette. Dominant influence is shown per vertex.
-palette = [
- (0.95,0.12,0.12,1),(0.12,0.45,0.98,1),(0.10,0.80,0.35,1),
- (1.00,0.68,0.08,1),(0.72,0.20,0.92,1),(0.05,0.82,0.82,1),
- (0.98,0.35,0.62,1),(0.58,0.72,0.12,1),(0.98,0.52,0.18,1),
- (0.35,0.30,0.95,1),(0.12,0.68,0.52,1),(0.78,0.48,0.24,1),
- (0.55,0.55,0.55,1),(0.95,0.78,0.75,1),(0.30,0.72,0.95,1),
- (0.75,0.85,0.18,1)
-]
+# Assign a unique, evenly spaced hue to every group; no palette reuse.
 group_index = {g.index:g.name for g in groups}
-group_color = {g.name:palette[i % len(palette)] for i,g in enumerate(groups)}
+group_color = {}
+for i, g in enumerate(groups):
+    hue = (i * 0.618033988749895) % 1.0
+    rgb = colorsys.hsv_to_rgb(hue, 0.78, 1.0)
+    group_color[g.name] = (rgb[0], rgb[1], rgb[2], 1.0)
 attr = mesh.data.color_attributes.get("VertexGroupDominantColor")
 if attr:
     mesh.data.color_attributes.remove(attr)
