@@ -228,6 +228,56 @@ for v in mesh.data.vertices:
         "neighbor_count": len(neighbor_samples),
         "inherited_weights": avg
     })
+# Repair toe/sole outliers from their connected foot-surface neighbors.
+# The copied influences always use the existing matching ValveBiped groups.
+foot_weight_repair = {"left": [], "right": []}
+for v in mesh.data.vertices:
+    world = mesh.matrix_world @ v.co
+    nx = (world.x - cx) / w
+    nz = (world.z - lo[2]) / h
+    if not (nz < 0.035 and 0.025 < abs(nx) < 0.20):
+        continue
+    side = "L" if nx > 0 else "R"
+    thigh_name = "ValveBiped.Bip01_" + side + "_Thigh"
+    calf_name = "ValveBiped.Bip01_" + side + "_Calf"
+    foot_name = "ValveBiped.Bip01_" + side + "_Foot"
+    pelvis_name = "ValveBiped.Bip01_Pelvis"
+    own = {group_index_to_name[g.group]: g.weight for g in v.groups}
+    if own.get(foot_name, 0.0) >= 0.85:
+        continue
+    neighbor_samples = []
+    for ni in adjacency[v.index]:
+        nv = mesh.data.vertices[ni]
+        nw = mesh.matrix_world @ nv.co
+        nnx = (nw.x - cx) / w
+        nnz = (nw.z - lo[2]) / h
+        if not (nnz < 0.10 and nnx * nx > 0):
+            continue
+        nweights = {group_index_to_name[g.group]: g.weight for g in nv.groups}
+        if nweights.get(foot_name, 0.0) >= 0.85:
+            neighbor_samples.append(nweights)
+    if len(neighbor_samples) < 2:
+        continue
+    names = (thigh_name, calf_name, foot_name)
+    avg = {name: sum(sample.get(name, 0.0) for sample in neighbor_samples) /
+                 len(neighbor_samples) for name in names}
+    total = sum(avg.values())
+    if total <= 1e-8:
+        continue
+    avg = {name: value / total for name, value in avg.items()}
+    for name in names:
+        mesh.vertex_groups[name].add([v.index], avg[name], "REPLACE")
+    group = group_by_name.get(pelvis_name)
+    if group:
+        try:
+            group.remove([v.index])
+        except RuntimeError:
+            pass
+    foot_weight_repair["left" if side == "L" else "right"].append({
+        "vertex": v.index,
+        "neighbor_count": len(neighbor_samples),
+        "inherited_weights": avg
+    })
 mod=mesh.modifiers.new("Femgram Armature","ARMATURE")
 mod.object=arm
 # Preserve the mesh world transform when parenting it to the armature.
@@ -243,6 +293,6 @@ for v in mesh.data.vertices:
 bpy.ops.object.select_all(action="DESELECT"); mesh.select_set(True); arm.select_set(True); bpy.context.view_layer.objects.active=arm
 dest=os.path.join(out,"Femgram-75K-ValveBiped-Rigged.fbx")
 bpy.ops.export_scene.fbx(filepath=dest,use_selection=True,object_types={"ARMATURE","MESH"},add_leaf_bones=False,bake_anim=False,path_mode="COPY",embed_textures=True,axis_forward="-Z",axis_up="Y")
-report={"vertices":len(mesh.data.vertices),"polygons":len(mesh.data.polygons),"bones":len(ad.bones),"vertex_groups":len(mesh.vertex_groups),"weighted_vertices":sum(bool(v.groups) for v in mesh.data.vertices),"knee_weight_repair":knee_weight_repair,"unweighted_vertices":sum(not v.groups for v in mesh.data.vertices),"automatic_weights":auto,"automatic_weights_error":err,"materials":[m.name if m else None for m in mesh.data.materials],"uv_layers":[u.name for u in mesh.data.uv_layers],"dimensions":[w,d,h],"warning":"Provisional proportion-based rig; validate deformation and Source-engine compatibility before release."}
+report={"vertices":len(mesh.data.vertices),"polygons":len(mesh.data.polygons),"bones":len(ad.bones),"vertex_groups":len(mesh.vertex_groups),"weighted_vertices":sum(bool(v.groups) for v in mesh.data.vertices),"knee_weight_repair":knee_weight_repair,"foot_weight_repair":foot_weight_repair,"unweighted_vertices":sum(not v.groups for v in mesh.data.vertices),"automatic_weights":auto,"automatic_weights_error":err,"materials":[m.name if m else None for m in mesh.data.materials],"uv_layers":[u.name for u in mesh.data.uv_layers],"dimensions":[w,d,h],"warning":"Provisional proportion-based rig; validate deformation and Source-engine compatibility before release."}
 with open(os.path.join(out,"Femgram-75K-Rig-Report.json"),"w") as f: json.dump(report,f,indent=2)
 print(json.dumps(report,indent=2))
