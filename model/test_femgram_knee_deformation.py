@@ -31,10 +31,28 @@ scene.world.color = (0.025, 0.025, 0.025)
 scene.view_settings.view_transform = "Standard"
 scene.view_settings.look = "Medium High Contrast"
 
+# Ensure the armature is evaluated in pose mode and the mesh modifier
+# actually consumes the named vertex groups.
+arm.data.pose_position = "POSE"
+arm_modifiers = [m for m in mesh.modifiers if m.type == "ARMATURE"]
+if not arm_modifiers:
+    raise RuntimeError("The 75K mesh has no Armature modifier.")
+for modifier in arm_modifiers:
+    modifier.object = arm
+    modifier.use_vertex_groups = True
+    modifier.use_bone_envelopes = False
+    modifier.show_viewport = True
+    modifier.show_render = True
+
 def reset_pose():
     for pb in arm.pose.bones:
         pb.rotation_mode = "XYZ"
         pb.rotation_euler = (0.0, 0.0, 0.0)
+        # Rotation limits are animator controls; mute them during this
+        # controlled deformation test so they cannot clamp the test pose.
+        for constraint in pb.constraints:
+            constraint.mute = True
+    scene.frame_set(scene.frame_current)
     bpy.context.view_layer.update()
 
 def evaluated_positions():
@@ -57,10 +75,16 @@ def render_knee(side, angle):
     bone_name = "ValveBiped.Bip01_" + side + "_Calf"
     pb = arm.pose.bones[bone_name]
     signed_angle = -angle if side == "L" else angle
-    pb.rotation_euler.x = math.radians(signed_angle)
+    rest_matrix = pb.matrix.copy()
+    pb.rotation_euler = (math.radians(signed_angle), 0.0, 0.0)
+    scene.frame_set(scene.frame_current)
     bpy.context.view_layer.update()
-
     depsgraph = bpy.context.evaluated_depsgraph_get()
+    posed_bone_matrix = arm.evaluated_get(depsgraph).pose.bones[bone_name].matrix.copy()
+    bone_matrix_delta = max(abs(posed_bone_matrix[i][j] - rest_matrix[i][j]) for i in range(4) for j in range(4))
+    if bone_matrix_delta < 1e-6:
+        raise RuntimeError("Pose did not change the calf bone matrix; check constraints/rotation axis: " + bone_name)
+
     arm_eval = arm.evaluated_get(depsgraph)
     calf = arm_eval.data.bones[bone_name]
     knee = arm_eval.matrix_world @ calf.head_local
@@ -93,6 +117,7 @@ def render_knee(side, angle):
         "side": "left" if side == "L" else "right",
         "angle_degrees": angle,
         "signed_local_x_degrees": signed_angle,
+        "bone_matrix_delta": round(bone_matrix_delta, 6),
         "finite_coordinates": finite,
         "vertices": len(posed),
         "vertices_moved": moved,
