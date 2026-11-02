@@ -1,0 +1,169 @@
+name: Femgram original vs 75K deformation comparison
+
+on:
+  push:
+    branches: [beta/gmod-addon]
+    paths:
+      - ".github/workflows/compare-femgram-topology.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout comparison workflow
+        uses: actions/checkout@v4
+        with:
+          ref: beta/gmod-addon
+
+      - name: Download original unoptimized source package
+        uses: actions/download-artifact@v4
+        with:
+          name: Femgram-Lite-Optimized
+          path: dist/original-package
+          repository: hesta-lang/savage-haunting
+          run-id: 41313407069
+          github-token: ${{ github.token }}
+
+      - name: Download optimized 75K mesh
+        uses: actions/download-artifact@v4
+        with:
+          name: Femgram-75K-ValveBiped-Rigged
+          path: dist/optimized-package
+          repository: hesta-lang/savage-haunting
+          run-id: 41332889809
+          github-token: ${{ github.token }}
+
+      - name: Locate both source meshes
+        id: inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          ORIGINAL="$(find dist/original-package -type f -path '*/source-package/base_basic_pbr.fbx' -print -quit)"
+          OPTIMIZED="$(find dist/optimized-package -type f -iname '*.fbx' -print -quit)"
+          test -n "$ORIGINAL"
+          test -n "$OPTIMIZED"
+          echo "original=$ORIGINAL" >> "$GITHUB_OUTPUT"
+          echo "optimized=$OPTIMIZED" >> "$GITHUB_OUTPUT"
+          echo "Original unoptimized source: $ORIGINAL"
+          echo "Optimized 75K source: $OPTIMIZED"
+
+      - name: Cache Blender runtime
+        id: blender-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/blender-4.4.3-linux-x64
+          key: blender-4.4.3-ubuntu-24.04-v1
+
+      - name: Install missing Blender system libraries
+        run: |
+          set -euo pipefail
+          missing=0
+          for lib in libEGL.so.1 libGL.so.1 libGLESv2.so.2 libgbm.so.1 libX11.so.6 libXi.so.6 libXrender.so.1 libXxf86vm.so.1 libXfixes.so.3 libxkbcommon.so.0; do
+            if ! ldconfig -p | grep -q "$lib"; then missing=1; fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            sudo apt-get update
+            sudo apt-get install -y libegl1 libgl1 libgles2 libgbm1 libx11-6 libxi6 libxrender1 libxxf86vm1 libxfixes3 libxkbcommon0
+          else
+            echo "All Blender runtime libraries are already available."
+          fi
+
+      - name: Download Blender runtime
+        if: steps.blender-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 https://download.blender.org/release/Blender4.4/blender-4.4.3-linux-x64.tar.xz -o /tmp/blender.tar.xz
+          tar -xJf /tmp/blender.tar.xz -C /tmp
+          rm -f /tmp/blender.tar.xz
+
+      - name: Rig and render original unoptimized model
+        env:
+          SOURCE_FBX: ${{ steps.inputs.outputs.original }}
+          OUTPUT_DIR: ${{ github.workspace }}/dist/original/rigged
+        run: |
+          set -euo pipefail
+          /tmp/blender-4.4.3-linux-x64/blender --background --python model/rig_femgram_75k.py
+          RIGGED_FBX="$OUTPUT_DIR/Femgram-75K-ValveBiped-Rigged.fbx" \
+          OUTPUT_DIR="${{ github.workspace }}/dist/original/validation" \
+          /tmp/blender-4.4.3-linux-x64/blender --background --python model/validate_femgram_rig.py
+          test -s dist/original/validation/Femgram-Rig-Validation.json
+          test -s dist/original/validation/Femgram-neutral.png
+
+      - name: Rig and render optimized 75K model
+        env:
+          SOURCE_FBX: ${{ steps.inputs.outputs.optimized }}
+          OUTPUT_DIR: ${{ github.workspace }}/dist/optimized/rigged
+        run: |
+          set -euo pipefail
+          /tmp/blender-4.4.3-linux-x64/blender --background --python model/rig_femgram_75k.py
+          RIGGED_FBX="$OUTPUT_DIR/Femgram-75K-ValveBiped-Rigged.fbx" \
+          OUTPUT_DIR="${{ github.workspace }}/dist/optimized/validation" \
+          /tmp/blender-4.4.3-linux-x64/blender --background --python model/validate_femgram_rig.py
+          test -s dist/optimized/validation/Femgram-Rig-Validation.json
+          test -s dist/optimized/validation/Femgram-neutral.png
+
+      - name: Create paired render sheets and comparison report
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from PIL import Image, ImageDraw
+          root = "dist"
+          names = [
+              "Femgram-neutral.png",
+              "Femgram-leg-pose-left-knee-only-front.png",
+              "Femgram-leg-pose-left-knee-only-side.png",
+              "Femgram-leg-pose-right-knee-only-front.png",
+              "Femgram-leg-pose-right-knee-only-side.png",
+              "Femgram-isolation-left-calf_only.png",
+              "Femgram-isolation-right-calf_only.png",
+              "Femgram-isolation-left-foot_only.png",
+              "Femgram-isolation-right-foot_only.png",
+              "Femgram-isolation-left-calf_with_foot_counterrotation.png",
+              "Femgram-isolation-right-calf_with_foot_counterrotation.png",
+          ]
+          os.makedirs("dist/comparison", exist_ok=True)
+          for name in names:
+              paths = [os.path.join(root, side, "validation", name) for side in ("original", "optimized")]
+              if not all(os.path.isfile(p) for p in paths):
+                  continue
+              imgs = [Image.open(p).convert("RGB") for p in paths]
+              width = max(i.width for i in imgs)
+              height = max(i.height for i in imgs)
+              panel_h = height + 48
+              sheet = Image.new("RGB", (width * 2 + 30, panel_h), (30, 30, 30))
+              draw = ImageDraw.Draw(sheet)
+              for x, img, label in [(0, imgs[0], "ORIGINAL - UNOPTIMIZED"), (width+30, imgs[1], "OPTIMIZED - 75K")]:
+                  draw.text((x+8, 8), label, fill=(255,255,255))
+                  sheet.paste(img, (x, 42))
+              sheet.save(os.path.join("dist/comparison", name.replace(".png", "-SIDE-BY-SIDE.png")))
+          reports = {}
+          for side in ("original", "optimized"):
+              path = os.path.join(root, side, "validation", "Femgram-Rig-Validation.json")
+              with open(path) as f:
+                  reports[side] = json.load(f)
+          summary = {
+              "comparison": "Original unoptimized base_basic_pbr.fbx versus optimized 75K mesh",
+              "same_rig_generator": "model/rig_femgram_75k.py",
+              "same_validator_and_pose_angles": "model/validate_femgram_rig.py",
+              "same_render_camera_lighting_and_material_setup": True,
+              "original": {k: reports["original"].get(k) for k in ("vertices","weighted_vertices","bones","surface_strain_diagnostics","checks")},
+              "optimized": {k: reports["optimized"].get(k) for k in ("vertices","weighted_vertices","bones","surface_strain_diagnostics","checks")},
+              "render_pairs": [f for f in os.listdir("dist/comparison") if f.endswith("SIDE-BY-SIDE.png")]
+          }
+          with open("dist/comparison/Femgram-Original-vs-75K-Comparison.json","w") as f:
+              json.dump(summary,f,indent=2)
+          print(json.dumps({k: {"vertices":v.get("vertices"),"bones":v.get("bones"),"checks":v.get("checks")} for k,v in reports.items()},indent=2))
+          PY
+
+      - name: Upload original versus optimized comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: Femgram-Original-vs-75K-Comparison
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
