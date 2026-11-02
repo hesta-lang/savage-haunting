@@ -37,8 +37,10 @@ jobs:
       - name: Install Blender
         run: |
           sudo apt-get update
-          sudo apt-get install -y blender
+          sudo apt-get install -y blender python3-numpy
       - name: Export static FBX without bones
+        env:
+          PYTHONPATH: /usr/lib/python3/dist-packages
         run: |
           blender -b --python-exit-code 1 --python model/export_femgram_without_bones.py -- "${{ steps.source.outputs.fbx }}" "$RUNNER_TEMP/Femgram-75K-Static-No-Bones.fbx"
           test -s "$RUNNER_TEMP/Femgram-75K-Static-No-Bones.fbx"
