@@ -1174,6 +1174,32 @@ for side_name, sign in (("left", 1), ("right", -1)):
         "passed": bool(indices) and not residual
     }
 
+
+# Foot-bone endpoint must remain on the measured foot surface after FBX
+# export/import. A bone extending below/outside the foot causes the apparent
+# toe pivot/rotation error even when the source rig build step succeeds.
+foot_endpoint_audit = {}
+for side_name, sign, prefix in (("left", 1, "L"), ("right", -1, "R")):
+    name = "ValveBiped.Bip01_" + prefix + "_Foot"
+    bone = arm.data.bones.get(name)
+    points = [mesh.matrix_world @ v.co for v in verts
+              if nx(v)*sign > 0.025 and nz(v) < 0.075]
+    tail = arm.matrix_world @ bone.tail_local if bone else Vector((0,0,0))
+    if points:
+        min_y = min(p.y for p in points); max_y = max(p.y for p in points)
+        min_z = min(p.z for p in points); max_z = max(p.z for p in points)
+        outside = (tail.y < min_y-0.025 or tail.y > max_y+0.025 or
+                   tail.z < min_z-0.025 or tail.z > max_z+0.025)
+    else:
+        min_y=max_y=min_z=max_z=0.0; outside=True
+    foot_endpoint_audit[side_name] = {
+        "found": bone is not None,
+        "tail_world": [round(float(x),6) for x in tail],
+        "foot_bounds_y": [round(float(min_y),6),round(float(max_y),6)],
+        "foot_bounds_z": [round(float(min_z),6),round(float(max_z),6)],
+        "outside_foot_surface_bounds": bool(outside)
+    }
+
 report = {
     "mesh_objects": len(meshes), "armature_objects": len(arms),
     "vertices": len(verts), "weighted_vertices": weighted,
@@ -1196,7 +1222,7 @@ report = {
     "lower_limb_bone_properties_and_centering": lower_limb_audit,
     "lower_limb_mirror_symmetry": lower_limb_symmetry,
     "renders": ["Femgram-bones-front.png", "Femgram-bones-side.png", "Femgram-neutral.png", "Femgram-leg-pose-left-knee-only-front.png", "Femgram-leg-pose-left-knee-only-side.png", "Femgram-leg-pose-right-knee-only-front.png", "Femgram-leg-pose-right-knee-only-side.png"] + joint_isolation_render_names,
-    "distal_foot_weight_audit": distal_foot_weight_audit,
+    "distal_foot_weight_audit": distal_foot_weight_audit,\n    "foot_endpoint_audit": foot_endpoint_audit,
     "checks": {
         "distal_foot_weights_valid": all(v["passed"] for v in distal_foot_weight_audit.values()),
         "mesh_and_armature_present": bool(meshes and arms),
@@ -1209,7 +1235,7 @@ report = {
             test.get("deformation_detected", False)
             for test in isolated_joint_tests.values()
         ),
-        "knee_and_ankle_pivots_centered": all(
+        "foot_bone_endpoints_on_surface": all(not foot_endpoint_audit[s]["outside_foot_surface_bounds"] for s in ("left", "right")),\n        "knee_and_ankle_pivots_centered": all(
             lower_limb_audit[side]["joint_centering"][joint].get("offset_distance", 999.0) <= 0.015
             for side in ("left", "right")
             for joint in ("knee", "ankle")
