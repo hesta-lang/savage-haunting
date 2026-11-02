@@ -523,7 +523,6 @@ for bone_name in sorted(bone_names):
         "tail_world": [round(float(v), 6) for v in tail],
         "length": round((tail-head).length, 6),
         "parent": bone.parent.name if bone.parent else None,
-        "roll_radians": round(float(bone.roll), 8),
         "local_axes_armature": {
             "X": [round(float(v), 6) for v in (basis @ Vector((1, 0, 0)))],
             "Y": [round(float(v), 6) for v in (basis @ Vector((0, 1, 0)))],
