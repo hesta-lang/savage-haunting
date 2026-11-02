@@ -367,8 +367,9 @@ def sampled_positions(indices=None):
         evaluated.to_mesh_clear()
 
 def choose_axis(bone_name, angle):
-    # Measure vertices actually influenced by this joint. A uniform whole-body
-    # sample can miss a small limb group and falsely report zero deformation.
+    # The rig generator aligns the leg-bone roll so local X is the intended
+    # anatomical flexion axis. Never select an axis by maximum RMS: that can
+    # choose twist and makes the test depend on small numerical differences.
     group = mesh.vertex_groups.get(bone_name)
     indices = []
     if group is not None:
@@ -376,36 +377,30 @@ def choose_axis(bone_name, angle):
                    if any(g.group == group.index and g.weight > 0.05 for g in v.groups)]
     stride = max(1, len(indices) // 1800)
     indices = indices[::stride] if indices else sample
-    # Test each local axis against the same saved pose. Resetting without
-    # restoring the already-posed parent made child-joint axis tests compare
-    # different baselines and could report misleading deformation values.
     saved = {pb.name: pb.rotation_euler.copy() for pb in arm.pose.bones}
     base_positions = sampled_positions(indices)
-    best = (0.0, 0)
     axis_measurements = {}
     for axis in range(3):
         reset_pose()
         for name, rotation in saved.items():
             if name in arm.pose.bones:
                 arm.pose.bones[name].rotation_euler = rotation
-        bpy.context.view_layer.update()
         pb = arm.pose.bones.get(bone_name)
         if pb is None:
             continue
         pb.rotation_euler[axis] = angle
         after = sampled_positions(indices)
         count = min(len(base_positions), len(after))
-        if count:
-            rms = math.sqrt(sum((after[i] - base_positions[i]).length_squared for i in range(count)) / count)
-            axis_measurements["XYZ"[axis]] = round(rms, 8)
-            if rms > best[0]:
-                best = (rms, axis)
+        rms = math.sqrt(sum((after[i] - base_positions[i]).length_squared
+                            for i in range(count)) / max(1, count)) if count else 0.0
+        axis_measurements["XYZ"[axis]] = round(rms, 8)
     reset_pose()
     for name, rotation in saved.items():
         if name in arm.pose.bones:
             arm.pose.bones[name].rotation_euler = rotation
     bpy.context.view_layer.update()
-    return best, len(indices), axis_measurements
+    # X is the explicit hinge axis authored by rig_femgram_75k.py.
+    return (axis_measurements.get("X", 0.0), 0), len(indices), axis_measurements
 
 reset_pose()
 neutral_positions = sampled_positions()
