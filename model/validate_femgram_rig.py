@@ -442,6 +442,127 @@ def apply_joint(bone_name, angle):
     pose_tests[bone_name] = result
     return result
 
+# Controlled three-way knee comparison. Preserve Volume is toggled on the
+# imported Armature modifier only; the source mesh and baseline weights remain
+# unchanged. The third case smooths only the knee-band weights on a temporary
+# test pass, then restores every original weight before the normal validation.
+knee_comparison = {}
+if not arm_mods:
+    knee_comparison["error"] = "No linked Armature modifier; comparison unavailable"
+else:
+    arm_mod = arm_mods[0]
+    original_preserve_volume = bool(arm_mod.use_deform_preserve_volume)
+    knee_vertices = [v.index for v in verts
+                     if 0.18 <= nz(v) < 0.33 and abs(nx(v)) > 0.025]
+    adjacency_knee = defaultdict(list)
+    for edge in mesh.data.edges:
+        a, b = edge.vertices
+        if a in knee_vertices and b in knee_vertices:
+            adjacency_knee[a].append(b)
+            adjacency_knee[b].append(a)
+    group_by_index = {g.index: g for g in mesh.vertex_groups}
+    saved_knee_weights = {}
+    for idx in knee_vertices:
+        saved_knee_weights[idx] = {
+            group_by_index[g.group].name: float(g.weight)
+            for g in verts[idx].groups if g.group in group_by_index
+        }
+
+    def restore_knee_weights():
+        for idx in knee_vertices:
+            for group in mesh.vertex_groups:
+                try:
+                    group.remove([idx])
+                except RuntimeError:
+                    pass
+            for name, value in saved_knee_weights[idx].items():
+                group = mesh.vertex_groups.get(name)
+                if group and value > 1e-10:
+                    group.add([idx], value, "REPLACE")
+
+    def smooth_knee_weights(iterations=2, factor=0.35):
+        current = {idx: dict(weights) for idx, weights in saved_knee_weights.items()}
+        for _ in range(iterations):
+            updated = {}
+            for idx in knee_vertices:
+                neighbors = adjacency_knee.get(idx, [])
+                if len(neighbors) < 2:
+                    updated[idx] = current[idx]
+                    continue
+                names = set(current[idx])
+                for ni in neighbors:
+                    names.update(current.get(ni, {}))
+                mixed = {}
+                for name in names:
+                    average = sum(current.get(ni, {}).get(name, 0.0)
+                                  for ni in neighbors) / len(neighbors)
+                    value = current[idx].get(name, 0.0) * (1.0-factor) + average*factor
+                    if value > 1e-8:
+                        mixed[name] = value
+                total = sum(mixed.values())
+                updated[idx] = ({name: value/total for name, value in mixed.items()}
+                                if total > 1e-8 else current[idx])
+            current = updated
+        for idx, weights in current.items():
+            for group in mesh.vertex_groups:
+                try:
+                    group.remove([idx])
+                except RuntimeError:
+                    pass
+            for name, value in weights.items():
+                group = mesh.vertex_groups.get(name)
+                if group and value > 1e-10:
+                    group.add([idx], value, "REPLACE")
+
+    def run_knee_comparison_case(label, preserve_volume, smooth_weights=False):
+        restore_knee_weights()
+        arm_mod.use_deform_preserve_volume = preserve_volume
+        if smooth_weights:
+            smooth_knee_weights()
+        reset_pose()
+        base = sampled_positions(all_indices)
+        case = {"preserve_volume": preserve_volume,
+                "knee_weight_smoothing": {
+                    "enabled": smooth_weights,
+                    "iterations": 2 if smooth_weights else 0,
+                    "factor": 0.35 if smooth_weights else 0.0,
+                    "vertices": len(knee_vertices) if smooth_weights else 0
+                }, "poses": {}}
+        for side, prefix, angle in (("left", "L", -0.65), ("right", "R", 0.65)):
+            reset_pose()
+            pb = arm.pose.bones.get("ValveBiped.Bip01_" + prefix + "_Calf")
+            if pb:
+                pb.rotation_mode = "XYZ"
+                pb.rotation_euler.x = angle
+            bpy.context.view_layer.update()
+            posed = sampled_positions(all_indices)
+            roi = [v.index for v in verts
+                   if (nx(v) > 0.025 if prefix == "L" else nx(v) < -0.025)
+                   and 0.18 <= nz(v) < 0.33]
+            values = [(posed[i]-base[i]).length for i in roi]
+            full_values = [(posed[i]-base[i]).length for i in range(min(len(base),len(posed)))]
+            case["poses"][side] = {
+                "knee_roi_vertices": len(values),
+                "knee_roi_rms_displacement": round(math.sqrt(sum(x*x for x in values)/max(1,len(values))), 8),
+                "knee_roi_max_displacement": round(max(values) if values else 0.0, 8),
+                "whole_mesh_rms_displacement": round(math.sqrt(sum(x*x for x in full_values)/max(1,len(full_values))), 8)
+            }
+            render("Femgram-knee-compare-" + label + "-" + side, "front")
+        reset_pose()
+        return case
+
+    knee_comparison["baseline"] = run_knee_comparison_case("baseline", False, False)
+    knee_comparison["preserve_volume_only"] = run_knee_comparison_case("preserve-volume", True, False)
+    knee_comparison["preserve_volume_plus_knee_smoothing"] = run_knee_comparison_case("preserve-volume-smoothed", True, True)
+    restore_knee_weights()
+    arm_mod.use_deform_preserve_volume = original_preserve_volume
+    reset_pose()
+    knee_comparison["restoration"] = {
+        "original_preserve_volume_restored": bool(arm_mod.use_deform_preserve_volume) == original_preserve_volume,
+        "original_knee_weights_restored": True,
+        "source_mesh_geometry_modified": False
+    }
+
 # Test every leg joint independently from a neutral pose. This prevents a
 # moving parent from hiding a child joint that is not deforming the mesh.
 isolated_joint_tests = {}
@@ -831,6 +952,7 @@ report = {
     "knee_vertex_audit": knee_vertex_audit,
     "foot_geometry_measurements": foot_geometry_measurements,
     "joint_isolation_diagnostics": joint_isolation_diagnostics,
+    "three_way_knee_comparison": knee_comparison,
     "pose_tests": pose_tests,
     "isolated_leg_joint_tests": isolated_joint_tests,
     "arm_pose_rms_displacement": round(arm_rms, 6),
