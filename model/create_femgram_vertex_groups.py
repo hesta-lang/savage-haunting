@@ -48,9 +48,16 @@ if attr:
 attr = mesh.data.color_attributes.new(name="VertexGroupDominantColor", type="FLOAT_COLOR", domain="POINT")
 
 counts = {g.name:0 for g in groups}
+member_counts = {g.name:0 for g in groups}
+weight_sums = {g.name:0.0 for g in groups}
 unweighted = []
 samples = []
 for v in mesh.data.vertices:
+    for entry in v.groups:
+        name = group_index.get(entry.group, "")
+        if name:
+            member_counts[name] += 1
+            weight_sums[name] += entry.weight
     influences = [(e.weight, group_index.get(e.group, "")) for e in v.groups]
     if not influences:
         unweighted.append(v.index)
@@ -120,6 +127,8 @@ report = {
  "vertices":len(mesh.data.vertices),"polygons":len(mesh.data.polygons),
  "groups":len(groups),"weighted_vertices":len(mesh.data.vertices)-len(unweighted),
  "unweighted_vertices":len(unweighted),"dominant_group_counts":counts,
+ "nonzero_member_counts":member_counts,
+ "weight_sums":{name:round(value,4) for name,value in weight_sums.items()},
  "palette_legend":legend,"low_dominance_samples":samples,
  "unweighted_vertex_indices":unweighted[:500],
  "note":"Colors show the strongest (dominant) vertex-group influence per vertex. Mixed weights are listed in low_dominance_samples; visual boundaries are diagnostic, not proof of anatomical correctness."
