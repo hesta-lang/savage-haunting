@@ -8,7 +8,7 @@ os.makedirs(out, exist_ok=True)
 
 bpy.ops.object.select_all(action="SELECT")
 bpy.ops.object.delete(use_global=False)
-bpy.ops.import_scene.fbx(filepath=src, automatic_bone_orientation=False)
+bpy.ops.import_scene.fbx(filepath=src, automatic_bone_orientation=False, use_manual_orientation=True, axis_forward="-Y", axis_up="Z")
 
 meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
 arms = [o for o in bpy.context.scene.objects if o.type == "ARMATURE"]
