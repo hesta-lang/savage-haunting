@@ -26,7 +26,7 @@ jobs:
           path: source
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
-          run-id: ${{ inputs.source_run_id }}
+          run-id: ${{ inputs.source_run_id || '41385511641' }}
       - name: Install Blender
         run: sudo apt-get update && sudo apt-get install -y blender
       - name: Locate source
