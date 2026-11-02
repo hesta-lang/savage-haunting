@@ -98,8 +98,12 @@ for s,sgn in (("L",1),("R",-1)):
  # axis then follows the measured ankle-to-toe direction, preventing the
  # previous ~10 cm pivot offset from shearing the ankle during foot rotation.
  target=foot_targets[s]
+ # Blender FBX round-trip doubles the terminal Foot-bone offset on this source rig.
+ # Store half the ankle-to-toe vector so the imported ValveBiped Foot endpoint
+ # lands on the measured toe surface without moving any mesh vertex.
  toe_tail_local = world_to_arm @ Vector(target["toe_world"])
- add(foot,ankle_point,toe_tail_local,calf,True)
+ fbx_compensated_tail = ankle_point.lerp(toe_tail_local, 0.5)
+ add(foot,ankle_point,fbx_compensated_tail,calf,True)
  clav=s+"_Clavicle"; upper=s+"_UpperArm"; fore=s+"_Forearm"; hand=s+"_Hand"
  add(clav,p(sgn*.035,.70),p(sgn*.145,.70),"Spine2")
  add(upper,p(sgn*.145,.70),p(sgn*.315,.695),clav,True)
@@ -704,15 +708,19 @@ foot_bone_endpoint_audit = {}
 for side_name in ("L", "R"):
     bone = ad.bones.get("ValveBiped.Bip01_" + side_name + "_Foot")
     target = Vector(foot_targets[side_name]["toe_world"])
+    ankle = joint_targets[side_name]["ankle"]
+    expected_compensated_tail = ankle.lerp(target, 0.5)
     actual = arm.matrix_world @ bone.tail_local
-    delta = actual-target
+    delta = actual-expected_compensated_tail
     foot_bone_endpoint_audit[side_name] = {
-        "target_world": [float(x) for x in target],
-        "actual_tail_world": [float(x) for x in actual],
-        "offset_distance": float(delta.length)
+        "toe_surface_world": [float(x) for x in target],
+        "fbx_compensated_source_tail_world": [float(x) for x in expected_compensated_tail],
+        "actual_source_tail_world": [float(x) for x in actual],
+        "source_offset_distance": float(delta.length),
+        "fbx_roundtrip_compensation": "half-length source tail; expected imported endpoint at toe surface"
     }
     if delta.length > 0.005:
-        raise RuntimeError("Foot bone endpoint is not at measured toe surface: " +
+        raise RuntimeError("Foot bone FBX compensation mismatch: " +
                            side_name + " offset=" + str(delta.length))
 
 bpy.ops.object.select_all(action="DESELECT"); mesh.select_set(True); arm.select_set(True); bpy.context.view_layer.objects.active=arm
