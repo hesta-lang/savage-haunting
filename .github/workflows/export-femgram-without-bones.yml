@@ -1,0 +1,47 @@
+name: Export Femgram 75K Without Bones
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Run ID containing the rigged FBX artifact"
+        required: true
+        default: "41382670364"
+jobs:
+  export-static:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Download rigged FBX artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Femgram-75K-ValveBiped-Rigged-Corrected
+          path: source
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id }}
+      - name: Locate FBX
+        id: source
+        shell: bash
+        run: |
+          FBX="$(find source -type f -iname '*.fbx' | head -n 1)"
+          test -n "$FBX"
+          echo "fbx=$FBX" >> "$GITHUB_OUTPUT"
+      - name: Install Blender
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender
+      - name: Export static FBX without bones
+        run: |
+          blender -b --python model/export_femgram_without_bones.py -- "${{ steps.source.outputs.fbx }}" "$RUNNER_TEMP/Femgram-75K-Static-No-Bones.fbx"
+      - name: Package
+        run: |
+          mkdir -p output
+          cp "$RUNNER_TEMP/Femgram-75K-Static-No-Bones.fbx" output/
+          printf '%s\n' 'Femgram static FBX' '75,000 vertices' 'No armature or bones' 'No vertex groups or skin weights' 'Mesh geometry retained' > output/README.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Femgram-75K-Static-No-Bones
+          path: output/
+          if-no-files-found: error
