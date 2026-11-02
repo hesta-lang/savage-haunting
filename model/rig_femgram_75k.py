@@ -219,7 +219,7 @@ for v in mesh.data.vertices:
  # Within this band, exposed leg vertices are fully assigned to the thigh /
  # calf chain: the pelvis must not retain residual influence and pull the
  # kneecap away from the bending joint.
- knee_zone=smoothstep(.185,.215,nz)*(1.0-smoothstep(.315,.345,nz))
+ knee_zone=smoothstep(.14,.19,nz)*(1.0-smoothstep(.36,.41,nz))
  knee_lateral=smoothstep(.025,.050,ax)*(1.0-smoothstep(.155,.180,ax))
  knee_core=max(0.0,min(1.0,knee_zone*knee_lateral))
  # Include the full exposed leg surface, using distance to the actual
@@ -245,7 +245,7 @@ for v in mesh.data.vertices:
  if leg_mask > 0.001:
   # Stable anatomical partition: distance falloff must not overpower the
   # knee/ankle blend or pull the foot back onto the calf.
-  knee_blend=smoothstep(.18,.34,nz)
+  knee_blend=smoothstep(.12,.40,nz)
   foot_blend=1.0-smoothstep(.025,.145,nz)
   priors={
    side+"_Thigh": knee_blend,
@@ -344,8 +344,8 @@ for v in mesh.data.vertices:
 # Smooth only the normalized Thigh/Calf share over mesh-connected knee vertices;
 # preserve total lower-limb influence and never reintroduce Pelvis or Foot weight.
 knee_transition_smoothing = {
-    "left": [], "right": [], "iterations": 6, "factor": 0.18,
-    "normalized_height_band": [0.18, 0.34],
+    "left": [], "right": [], "iterations": 12, "factor": 0.25,
+    "normalized_height_band": [0.12, 0.40],
     "preserves_total_leg_weight": True,
     "disabled_reason": None,
     "pelvis_weight_added": False,
@@ -360,7 +360,7 @@ for side_name, sign in (("L", 1), ("R", -1)):
         world = mesh.matrix_world @ vtx.co
         nx = (world.x - cx) / w
         nz = (world.z - lo[2]) / h
-        if nx * sign <= 0.025 or not (0.18 <= nz <= 0.34):
+        if nx * sign <= 0.025 or not (0.12 <= nz <= 0.40):
             continue
         weights = {group_index_to_name[g.group]: g.weight for g in vtx.groups}
         leg_total = weights.get(thigh_name, 0.0) + weights.get(calf_name, 0.0)
@@ -634,10 +634,10 @@ for v in mesh.data.vertices:
 # strongly assigned to the matching leg chain are eligible, so skirt/body
 # vertices remain untouched. Remove residual Pelvis/Foot and smooth the
 # normalized Thigh/Calf share over the actual connected knee surface.
-final_knee_weight_cleanup = {"left": 0, "right": 0, "iterations": 0, "factor": 0.0,
-                             "normalized_height_band": [0.17, 0.35],
+final_knee_weight_cleanup = {"left": 0, "right": 0, "iterations": 8, "factor": 0.22,
+                             "normalized_height_band": [0.12, 0.40],
                              "minimum_existing_leg_weight": 0.80,
-                             "smoothing_disabled": True}
+                             "smoothing_disabled": False}
 for side_name, sign in (("L", 1), ("R", -1)):
     thigh_name = "ValveBiped.Bip01_" + side_name + "_Thigh"
     calf_name = "ValveBiped.Bip01_" + side_name + "_Calf"
@@ -648,7 +648,7 @@ for side_name, sign in (("L", 1), ("R", -1)):
         world = mesh.matrix_world @ vtx.co
         nx = (world.x-cx)/w
         nz = (world.z-lo[2])/h
-        if nx*sign <= 0.025 or not (0.17 <= nz <= 0.35):
+        if nx*sign <= 0.025 or not (0.12 <= nz <= 0.40):
             continue
         own = {group_index_to_name[g.group]: g.weight for g in vtx.groups}
         thigh_w = own.get(thigh_name, 0.0)
@@ -714,7 +714,7 @@ for side_name in ("L", "R"):
 
 bpy.ops.object.select_all(action="DESELECT"); mesh.select_set(True); arm.select_set(True); bpy.context.view_layer.objects.active=arm
 dest=os.path.join(out,"Femgram-75K-ValveBiped-Rigged.fbx")
-bpy.ops.export_scene.fbx(filepath=dest,use_selection=True,object_types={"ARMATURE","MESH"},add_leaf_bones=False,bake_anim=False,path_mode="COPY",embed_textures=True,axis_forward="-Z",axis_up="Y")
+bpy.ops.export_scene.fbx(filepath=dest,use_selection=True,object_types={"ARMATURE","MESH"},add_leaf_bones=False,bake_anim=False,path_mode="COPY",embed_textures=True,axis_forward="-Y",axis_up="Z")
 report={"vertices":len(mesh.data.vertices),"polygons":len(mesh.data.polygons),"bones":len(ad.bones),"vertex_groups":len(mesh.vertex_groups),"weighted_vertices":sum(bool(v.groups) for v in mesh.data.vertices),"knee_weight_repair":knee_weight_repair,"knee_transition_smoothing":knee_transition_smoothing,"foot_weight_repair":foot_weight_repair,"foot_cap_weight_lock":foot_cap_weight_lock,"final_distal_foot_lock":final_distal_foot_lock,"final_knee_weight_cleanup":final_knee_weight_cleanup,"foot_bone_endpoint_audit":foot_bone_endpoint_audit,"foot_targets":foot_targets,"ankle_transition_smoothing":ankle_transition_smoothing,"ankle_weight_diagnostics":ankle_weight_diagnostics,"unweighted_vertices":sum(not v.groups for v in mesh.data.vertices),"automatic_weights":auto,"automatic_weights_error":err,"materials":[m.name if m else None for m in mesh.data.materials],"uv_layers":[u.name for u in mesh.data.uv_layers],"dimensions":[w,d,h],"warning":"Provisional proportion-based rig; validate deformation and Source-engine compatibility before release."}
 with open(os.path.join(out,"Femgram-75K-Rig-Report.json"),"w") as f: json.dump(report,f,indent=2)
 print(json.dumps(report,indent=2))
