@@ -30,23 +30,28 @@ for side_name, sign in (("L",1),("R",-1)):
             sorted(q.y for q in samples)[len(samples)//2],
             sorted(q.z for q in samples)[len(samples)//2]
         ))
-# Measure each actual foot region before creating bones. The foot tail is placed
-# at a robust toe-edge centroid rather than an arbitrary whole-body depth.
+# Measure the toe end from an actual mesh cross-section, using the same
+# component-wise median method as the knee/ankle pivots. A centroid of the
+# entire front 8% can be pulled downward by the sole and tilts the Foot bone;
+# a narrow front-most cross-section gives a stable anatomical toe endpoint.
 foot_targets={}
 for side_name, sign in (("L",1),("R",-1)):
     foot_points=[q for q in vs
                  if ((q.x-cx)/w)*sign > 0.025
                  and (q.z-lo[2])/h < 0.075]
-    if not foot_points:
-        raise RuntimeError("Could not locate "+side_name+" foot geometry")
+    if len(foot_points) < 20:
+        raise RuntimeError("Insufficient "+side_name+" foot geometry: "+str(len(foot_points)))
     front_depths=sorted(q.y for q in foot_points)
-    toe_cut=front_depths[max(0,int((len(front_depths)-1)*0.08))]
+    toe_cut=front_depths[max(0,int((len(front_depths)-1)*0.025))]
     toe_points=[q for q in foot_points if q.y <= toe_cut]
+    if len(toe_points) < 8:
+        raise RuntimeError("Insufficient "+side_name+" toe cross-section: "+str(len(toe_points)))
     foot_targets[side_name]={
-        "x": (sum(q.x for q in toe_points)/len(toe_points)-cx)/w,
-        "z": (sum(q.z for q in toe_points)/len(toe_points)-lo[2])/h,
-        "toe_y": (sum(q.y for q in toe_points)/len(toe_points)-cy)/d,
-        "toe_sample_vertices": len(toe_points)
+        "x": (sorted(q.x for q in toe_points)[len(toe_points)//2]-cx)/w,
+        "z": (sorted(q.z for q in toe_points)[len(toe_points)//2]-lo[2])/h,
+        "toe_y": (sorted(q.y for q in toe_points)[len(toe_points)//2]-cy)/d,
+        "toe_sample_vertices": len(toe_points),
+        "method": "component-wise median of front-most 2.5% toe cross-section"
     }
 def normalized_joint_point(point):
     return p((point.x-cx)/w,(point.z-lo[2])/h,(point.y-cy)/d)
