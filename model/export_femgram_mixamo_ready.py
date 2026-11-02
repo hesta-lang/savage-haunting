@@ -68,8 +68,7 @@ bpy.ops.export_scene.fbx(
     use_mesh_modifiers=False,
     use_triangles=False,
     axis_forward="-Z",
-    axis_up="Y",
-    version="7400"
+    axis_up="Y"
 )
 print(json.dumps({"mesh_objects": len(clean_meshes), "vertices": vertex_count,
                   "armatures": len(armatures), "vertex_groups": groups,
