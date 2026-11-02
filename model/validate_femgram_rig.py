@@ -689,7 +689,6 @@ for side_name, sign, prefix in (("left", 1, "L"), ("right", -1, "R")):
             "use_deform": bool(bone.use_deform),
             "inherit_scale": str(bone.inherit_scale),
             "inherit_rotation": bool(bone.use_inherit_rotation),
-            "roll": round(float(bone.roll), 6),
             "head_tail_connection_error": round(float(
                 (head - (arm.matrix_world @ bone.parent.tail_local)).length
             ), 8) if bone.use_connect and bone.parent else None
