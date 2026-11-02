@@ -282,6 +282,53 @@ for v in mesh.data.vertices:
         "neighbor_count": len(neighbor_samples),
         "inherited_weights": avg
     })
+# Smooth the Calf-to-Foot handoff on the connected ankle surface.
+# Work on the normalized Calf/Foot share only; preserve each vertex's total
+# lower-limb influence and leave Thigh/Pelvis and the source geometry untouched.
+ankle_transition_smoothing = {"left": [], "right": [], "iterations": 4, "factor": 0.35}
+for side_name, sign in (("L", 1), ("R", -1)):
+    calf_name = "ValveBiped.Bip01_" + side_name + "_Calf"
+    foot_name = "ValveBiped.Bip01_" + side_name + "_Foot"
+    eligible = set()
+    for vtx in mesh.data.vertices:
+        world = mesh.matrix_world @ vtx.co
+        nx = (world.x - cx) / w
+        nz = (world.z - lo[2]) / h
+        if nx * sign > 0.025 and 0.018 <= nz <= 0.135:
+            weights = {group_index_to_name[g.group]: g.weight for g in vtx.groups}
+            if weights.get(calf_name, 0.0) + weights.get(foot_name, 0.0) > 0.50:
+                eligible.add(vtx.index)
+    # Smooth the Foot share over mesh-connected neighbors, not Euclidean
+    # proximity, so nearby but disconnected surfaces cannot exchange weights.
+    for iteration in range(ankle_transition_smoothing["iterations"]):
+        updates = {}
+        for idx in eligible:
+            vtx = mesh.data.vertices[idx]
+            own = {group_index_to_name[g.group]: g.weight for g in vtx.groups}
+            total = own.get(calf_name, 0.0) + own.get(foot_name, 0.0)
+            if total <= 1e-8:
+                continue
+            own_foot_share = own.get(foot_name, 0.0) / total
+            neighbor_shares = []
+            for ni in adjacency[idx]:
+                if ni not in eligible:
+                    continue
+                nv = mesh.data.vertices[ni]
+                nw = {group_index_to_name[g.group]: g.weight for g in nv.groups}
+                n_total = nw.get(calf_name, 0.0) + nw.get(foot_name, 0.0)
+                if n_total > 1e-8:
+                    neighbor_shares.append(nw.get(foot_name, 0.0) / n_total)
+            if not neighbor_shares:
+                continue
+            average = sum(neighbor_shares) / len(neighbor_shares)
+            factor = ankle_transition_smoothing["factor"]
+            new_share = max(0.0, min(1.0, own_foot_share * (1.0-factor) + average*factor))
+            updates[idx] = (total*(1.0-new_share), total*new_share)
+        for idx, (calf_weight, foot_weight) in updates.items():
+            mesh.vertex_groups[calf_name].add([idx], calf_weight, "REPLACE")
+            mesh.vertex_groups[foot_name].add([idx], foot_weight, "REPLACE")
+    ankle_transition_smoothing["left" if side_name == "L" else "right"] = sorted(eligible)
+
 # Repair toe/sole outliers from their connected foot-surface neighbors.
 # The copied influences always use the existing matching ValveBiped groups.
 foot_weight_repair = {"left": [], "right": []}
@@ -347,6 +394,6 @@ for v in mesh.data.vertices:
 bpy.ops.object.select_all(action="DESELECT"); mesh.select_set(True); arm.select_set(True); bpy.context.view_layer.objects.active=arm
 dest=os.path.join(out,"Femgram-75K-ValveBiped-Rigged.fbx")
 bpy.ops.export_scene.fbx(filepath=dest,use_selection=True,object_types={"ARMATURE","MESH"},add_leaf_bones=False,bake_anim=False,path_mode="COPY",embed_textures=True,axis_forward="-Z",axis_up="Y")
-report={"vertices":len(mesh.data.vertices),"polygons":len(mesh.data.polygons),"bones":len(ad.bones),"vertex_groups":len(mesh.vertex_groups),"weighted_vertices":sum(bool(v.groups) for v in mesh.data.vertices),"knee_weight_repair":knee_weight_repair,"foot_weight_repair":foot_weight_repair,"unweighted_vertices":sum(not v.groups for v in mesh.data.vertices),"automatic_weights":auto,"automatic_weights_error":err,"materials":[m.name if m else None for m in mesh.data.materials],"uv_layers":[u.name for u in mesh.data.uv_layers],"dimensions":[w,d,h],"warning":"Provisional proportion-based rig; validate deformation and Source-engine compatibility before release."}
+report={"vertices":len(mesh.data.vertices),"polygons":len(mesh.data.polygons),"bones":len(ad.bones),"vertex_groups":len(mesh.vertex_groups),"weighted_vertices":sum(bool(v.groups) for v in mesh.data.vertices),"knee_weight_repair":knee_weight_repair,"foot_weight_repair":foot_weight_repair,"ankle_transition_smoothing":ankle_transition_smoothing,"unweighted_vertices":sum(not v.groups for v in mesh.data.vertices),"automatic_weights":auto,"automatic_weights_error":err,"materials":[m.name if m else None for m in mesh.data.materials],"uv_layers":[u.name for u in mesh.data.uv_layers],"dimensions":[w,d,h],"warning":"Provisional proportion-based rig; validate deformation and Source-engine compatibility before release."}
 with open(os.path.join(out,"Femgram-75K-Rig-Report.json"),"w") as f: json.dump(report,f,indent=2)
 print(json.dumps(report,indent=2))
