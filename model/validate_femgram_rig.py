@@ -665,6 +665,87 @@ for bone_name in sorted(bone_names):
         }
     }
 
+# Detailed lower-limb property and anatomical centering audit.
+# Cross-section centers are measured from the imported mesh in world space;
+# this avoids comparing armature-local coordinates with mesh-local bounds.
+lower_limb_audit = {}
+for side_name, sign, prefix in (("left", 1, "L"), ("right", -1, "R")):
+    side_bones = {}
+    for part in ("Thigh", "Calf", "Foot"):
+        name = "ValveBiped.Bip01_" + prefix + "_" + part
+        bone = arm.data.bones.get(name)
+        if bone is None:
+            side_bones[part] = {"found": False}
+            continue
+        head = arm.matrix_world @ bone.head_local
+        tail = arm.matrix_world @ bone.tail_local
+        side_bones[part] = {
+            "found": True,
+            "head_world": [round(float(x), 6) for x in head],
+            "tail_world": [round(float(x), 6) for x in tail],
+            "length": round(float((tail-head).length), 6),
+            "parent": bone.parent.name if bone.parent else None,
+            "connected": bool(bone.use_connect),
+            "use_deform": bool(bone.use_deform),
+            "inherit_scale": str(bone.inherit_scale),
+            "inherit_rotation": bool(bone.use_inherit_rotation),
+            "roll": round(float(bone.roll), 6),
+            "head_tail_connection_error": round(float(
+                (head - (arm.matrix_world @ bone.parent.tail_local)).length
+            ), 8) if bone.use_connect and bone.parent else None
+        }
+    joints = {}
+    for joint_name, z_target in (("knee", 0.265), ("ankle", 0.075)):
+        samples = []
+        for vert in verts:
+            world = mesh.matrix_world @ vert.co
+            nz_value = (world.z - lo[2]) / max(height, 1e-8)
+            nx_value = (world.x - center.x) / max(width, 1e-8)
+            if nx_value * sign > 0.025 and abs(nz_value-z_target) <= 0.006:
+                samples.append(world)
+        if samples:
+            samples.sort(key=lambda p: p.x)
+            mid = len(samples)//2
+            centerline = Vector((
+                sorted(p.x for p in samples)[mid],
+                sorted(p.y for p in samples)[mid],
+                sorted(p.z for p in samples)[mid]
+            ))
+        else:
+            centerline = None
+        bone_name = "ValveBiped.Bip01_" + prefix + ("_Thigh" if joint_name == "knee" else "_Calf")
+        joint_bone = arm.data.bones.get(bone_name)
+        joint_point = (arm.matrix_world @ joint_bone.tail_local) if joint_bone else None
+        if centerline is not None and joint_point is not None:
+            delta = joint_point-centerline
+            joints[joint_name] = {
+                "mesh_cross_section_vertices": len(samples),
+                "mesh_cross_section_median_world": [round(float(x), 6) for x in centerline],
+                "bone_joint_world": [round(float(x), 6) for x in joint_point],
+                "offset_xyz": [round(float(x), 6) for x in delta],
+                "offset_distance": round(float(delta.length), 6)
+            }
+        else:
+            joints[joint_name] = {"mesh_cross_section_vertices": len(samples), "status": "insufficient_cross_section"}
+    lower_limb_audit[side_name] = {
+        "bones": side_bones,
+        "joint_centering": joints
+    }
+
+# Compare mirrored lower-limb endpoints in world space. X is mirrored while
+# Y and Z should coincide; this exposes asymmetry independently of body center.
+lower_limb_symmetry = {}
+for part in ("Thigh", "Calf", "Foot"):
+    left = arm.data.bones.get("ValveBiped.Bip01_L_" + part)
+    right = arm.data.bones.get("ValveBiped.Bip01_R_" + part)
+    if left and right:
+        lh, lt = arm.matrix_world @ left.head_local, arm.matrix_world @ left.tail_local
+        rh, rt = arm.matrix_world @ right.head_local, arm.matrix_world @ right.tail_local
+        lower_limb_symmetry[part] = {
+            "head_mirror_error": round(float((Vector((lh.x, lh.y, lh.z))-Vector((-rh.x, rh.y, rh.z))).length), 6),
+            "tail_mirror_error": round(float((Vector((lt.x, lt.y, lt.z))-Vector((-rt.x, rt.y, rt.z))).length), 6)
+        }
+
 def make_overlay_material(name, color):
     mat = bpy.data.materials.new(name)
     mat.diffuse_color = (*color, 1.0)
@@ -732,6 +813,8 @@ report = {
     "leg_pose_rms_displacement": round(leg_rms, 6),
     "leg_pose_tests": leg_pose_tests,
     "bone_rest_pose_world": bone_audit,
+    "lower_limb_bone_properties_and_centering": lower_limb_audit,
+    "lower_limb_mirror_symmetry": lower_limb_symmetry,
     "renders": ["Femgram-bones-front.png", "Femgram-bones-side.png", "Femgram-neutral.png", "Femgram-leg-pose-left-knee-only-front.png", "Femgram-leg-pose-left-knee-only-side.png", "Femgram-leg-pose-right-knee-only-front.png", "Femgram-leg-pose-right-knee-only-side.png"] + joint_isolation_render_names,
     "checks": {
         "mesh_and_armature_present": bool(meshes and arms),
