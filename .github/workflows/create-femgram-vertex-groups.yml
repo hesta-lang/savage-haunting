@@ -1,0 +1,74 @@
+name: Femgram - Generate and visualize vertex groups
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  vertex-groups:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+        with:
+          ref: beta/gmod-addon
+
+      - name: Download original 75K source FBX
+        uses: actions/download-artifact@v4
+        with:
+          name: Femgram-75K-ValveBiped-Rigged
+          path: dist/source
+          repository: hesta-lang/savage-haunting
+          run-id: 41332889809
+          github-token: ${{ github.token }}
+
+      - name: Locate source FBX
+        id: source
+        run: |
+          set -euo pipefail
+          FILE="$(find dist/source -type f -iname '*.fbx' -print -quit)"
+          test -n "$FILE"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Blender runtime
+        id: blender-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/blender-4.4.3-linux-x64
+          key: blender-4.4.3-ubuntu-24.04-v1
+
+      - name: Install Blender system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libgles2 libgbm1 libx11-6 libxi6 libxrender1 libxxf86vm1 libxfixes3 libxkbcommon0
+
+      - name: Download Blender
+        if: steps.blender-cache.outputs.cache-hit != 'true'
+        run: |
+          curl -fL --retry 3 https://download.blender.org/release/Blender4.4/blender-4.4.3-linux-x64.tar.xz -o /tmp/blender.tar.xz
+          tar -xJf /tmp/blender.tar.xz -C /tmp
+          rm -f /tmp/blender.tar.xz
+
+      - name: Generate vertex groups and diagnostic renders
+        env:
+          SOURCE_FBX: ${{ steps.source.outputs.file }}
+          OUTPUT_DIR: ${{ github.workspace }}/dist/vertex-groups
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          /tmp/blender-4.4.3-linux-x64/blender --background --python model/create_femgram_vertex_groups.py
+          test -s dist/vertex-groups/Femgram-75K-Vertex-Groups-Only.fbx
+          test -s dist/vertex-groups/Femgram-Vertex-Groups-Front.png
+          test -s dist/vertex-groups/Femgram-Vertex-Groups-Side.png
+          test -s dist/vertex-groups/Femgram-Vertex-Groups-Report.json
+
+      - name: Upload vertex groups and renders
+        uses: actions/upload-artifact@v4
+        with:
+          name: Femgram-75K-Vertex-Groups-Diagnostic
+          path: dist/vertex-groups/
+          if-no-files-found: error
+          retention-days: 30
