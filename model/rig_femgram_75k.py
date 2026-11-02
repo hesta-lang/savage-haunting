@@ -245,7 +245,7 @@ for v in mesh.data.vertices:
  if leg_mask > 0.001:
   # Stable anatomical partition: distance falloff must not overpower the
   # knee/ankle blend or pull the foot back onto the calf.
-  knee_blend=smoothstep(.18,.34,nz)
+  knee_blend=smoothstep(.235,.295,nz)
   foot_blend=1.0-smoothstep(.025,.145,nz)
   priors={
    side+"_Thigh": knee_blend,
@@ -344,9 +344,10 @@ for v in mesh.data.vertices:
 # Smooth only the normalized Thigh/Calf share over mesh-connected knee vertices;
 # preserve total lower-limb influence and never reintroduce Pelvis or Foot weight.
 knee_transition_smoothing = {
-    "left": [], "right": [], "iterations": 12, "factor": 0.40,
+    "left": [], "right": [], "iterations": 0, "factor": 0.0,
     "normalized_height_band": [0.17, 0.35],
     "preserves_total_leg_weight": True,
+    "disabled_reason": "Avoids broad topology averaging that smears the hinge blend into the calf",
     "pelvis_weight_added": False,
     "topology_preserved": True,
     "method": "bilateral mesh-adjacency smoothing of normalized thigh/calf shares"
@@ -633,9 +634,10 @@ for v in mesh.data.vertices:
 # strongly assigned to the matching leg chain are eligible, so skirt/body
 # vertices remain untouched. Remove residual Pelvis/Foot and smooth the
 # normalized Thigh/Calf share over the actual connected knee surface.
-final_knee_weight_cleanup = {"left": 0, "right": 0, "iterations": 24, "factor": 0.45,
+final_knee_weight_cleanup = {"left": 0, "right": 0, "iterations": 0, "factor": 0.0,
                              "normalized_height_band": [0.17, 0.35],
-                             "minimum_existing_leg_weight": 0.80}
+                             "minimum_existing_leg_weight": 0.80,
+                             "smoothing_disabled": True}
 for side_name, sign in (("L", 1), ("R", -1)):
     thigh_name = "ValveBiped.Bip01_" + side_name + "_Thigh"
     calf_name = "ValveBiped.Bip01_" + side_name + "_Calf"
