@@ -125,27 +125,33 @@ for v in mesh.data.vertices:
   # The knee pivot is at normalized height .265. Blend only in a narrow
   # anatomical band around that pivot; above it the thigh owns the vertices,
   # below it the calf owns them. At the joint itself both receive 50%.
-  knee_blend=smoothstep(.235,.295,nz)
-
-  # The foot is a complete anatomical region, not only its front-facing
-  # surface. Applying a front/back gate split the rear foot between calf and
-  # foot bones and produced the large triangular stretch during knee flexion.
-  # Blend only through the ankle transition; the whole sole/toe region follows
-  # the Foot bone consistently on both front and rear surfaces.
-  foot_blend=1.0-smoothstep(.055,.105,nz)
-
-  thigh_weight=knee_blend
-  calf_weight=(1.0-knee_blend)*(1.0-foot_blend)
-  foot_weight=(1.0-knee_blend)*foot_blend
-  leg_total=thigh_weight+calf_weight+foot_weight
-  leg_gates={
-   side+"_Thigh": thigh_weight/leg_total,
-   side+"_Calf": calf_weight/leg_total,
-   side+"_Foot": foot_weight/leg_total
+  # Base anatomical partition: blend smoothly across the knee and ankle.
+  # These priors establish which joint owns each height band; distance to the
+  # actual bone segment then corrects the distribution for the mesh surface.
+  knee_blend=smoothstep(.215,.315,nz)
+  foot_blend=1.0-smoothstep(.045,.090,nz)
+  priors={
+   side+"_Thigh": knee_blend,
+   side+"_Calf": (1.0-knee_blend)*(1.0-foot_blend),
+   side+"_Foot": (1.0-knee_blend)*foot_blend
   }
+  # Proximity correction prevents vertices on the rear/side of the ankle and
+  # foot from inheriting weights merely because they share the same Z height.
+  # Adjacent bones naturally share influence near the knee and ankle pivots.
+  leg_gates={}
+  for bone_name, prior in priors.items():
+   if prior <= 1e-10:
+    continue
+   distance=distseg(xw,*segmap[bone_name])
+   leg_gates[bone_name]=prior/((distance+0.025)**2.0)
+  leg_total=sum(leg_gates.values())
+  if leg_total <= 1e-12:
+   leg_gates={side+"_Thigh":knee_blend,
+              side+"_Calf":(1.0-knee_blend)*(1.0-foot_blend),
+              side+"_Foot":(1.0-knee_blend)*foot_blend}
+   leg_total=sum(leg_gates.values())
   for n,weight in leg_gates.items():
-   if weight > 1e-12:
-    groups[n].add([v.index],leg_mask*weight,"REPLACE")
+   groups[n].add([v.index],leg_mask*weight/leg_total,"REPLACE")
   # Pelvis influence is allowed only outside the exposed leg mask. In the
   # knee core leg_mask is 1, so every knee vertex is attached to the leg chain.
   pelvis_weight=1.0-leg_mask
