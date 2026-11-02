@@ -412,14 +412,50 @@ neutral_positions = sampled_positions()
 pose_tests = {}
 def apply_joint(bone_name, angle):
     if bone_name not in arm.pose.bones:
-        pose_tests[bone_name] = {"found": False, "rms_displacement": 0.0}
-        return
+        result = {"found": False, "deformation_detected": False,
+                  "rms_displacement": 0.0, "reason": "missing_pose_bone"}
+        pose_tests[bone_name] = result
+        return result
+    pb = arm.pose.bones[bone_name]
+    before_matrix = pb.matrix.copy()
     (rms, axis), sample_count, axis_measurements = choose_axis(bone_name, angle)
-    arm.pose.bones[bone_name].rotation_euler[axis] = angle
-    pose_tests[bone_name] = {"found": True, "chosen_local_axis": ["X", "Y", "Z"][axis],
-                             "rms_displacement": round(rms, 6),
-                             "axis_rms_displacement": axis_measurements,
-                             "influenced_sample_vertices": sample_count}
+    if axis < 0 or rms <= 0.0001:
+        bpy.context.view_layer.update()
+        result = {
+            "found": True, "deformation_detected": False,
+            "chosen_local_axis": None, "rms_displacement": round(rms, 8),
+            "axis_rms_displacement": axis_measurements,
+            "influenced_sample_vertices": sample_count,
+            "bone_matrix_changed": False,
+            "reason": "weighted_vertices_did_not_move_on_any_local_axis"
+        }
+        pose_tests[bone_name] = result
+        return result
+    pb.rotation_euler[axis] = angle
+    bpy.context.view_layer.update()
+    matrix_delta = sum(abs(pb.matrix[r][c] - before_matrix[r][c])
+                       for r in range(4) for c in range(4))
+    result = {
+        "found": True, "deformation_detected": True,
+        "chosen_local_axis": ["X", "Y", "Z"][axis],
+        "rms_displacement": round(rms, 8),
+        "axis_rms_displacement": axis_measurements,
+        "influenced_sample_vertices": sample_count,
+        "bone_matrix_changed": matrix_delta > 1e-5,
+        "bone_matrix_delta_l1": round(float(matrix_delta), 8)
+    }
+    pose_tests[bone_name] = result
+    return result
+
+# Test every leg joint independently from a neutral pose. This prevents a
+# moving parent from hiding a child joint that is not deforming the mesh.
+isolated_joint_tests = {}
+for side_name in ("L", "R"):
+    for part, test_angle in (("Thigh", 0.35), ("Calf", -0.50), ("Foot", 0.30)):
+        reset_pose()
+        full_name = "ValveBiped.Bip01_" + side_name + "_" + part
+        isolated_joint_tests[full_name] = apply_joint(full_name, test_angle)
+        reset_pose()
 
 # Neutral
 reset_pose()
@@ -480,11 +516,24 @@ for bone_name in sorted(bone_names):
     bone = arm.data.bones[bone_name]
     head = arm.matrix_world @ bone.head_local
     tail = arm.matrix_world @ bone.tail_local
+    basis = bone.matrix_local.to_3x3()
+    world_basis = arm.matrix_world.to_3x3() @ basis
     bone_audit[bone_name] = {
         "head_world": [round(float(v), 6) for v in head],
         "tail_world": [round(float(v), 6) for v in tail],
         "length": round((tail-head).length, 6),
-        "parent": bone.parent.name if bone.parent else None
+        "parent": bone.parent.name if bone.parent else None,
+        "roll_radians": round(float(bone.roll), 8),
+        "local_axes_armature": {
+            "X": [round(float(v), 6) for v in (basis @ Vector((1, 0, 0)))],
+            "Y": [round(float(v), 6) for v in (basis @ Vector((0, 1, 0)))],
+            "Z": [round(float(v), 6) for v in (basis @ Vector((0, 0, 1)))]
+        },
+        "local_axes_world": {
+            "X": [round(float(v), 6) for v in (world_basis @ Vector((1, 0, 0)))],
+            "Y": [round(float(v), 6) for v in (world_basis @ Vector((0, 1, 0)))],
+            "Z": [round(float(v), 6) for v in (world_basis @ Vector((0, 0, 1)))]
+        }
     }
 
 def make_overlay_material(name, color):
@@ -547,6 +596,7 @@ report = {
     "geometry_diagnostics": geometry_diagnostics,
     "foot_geometry_measurements": foot_geometry_measurements,
     "pose_tests": pose_tests,
+    "isolated_leg_joint_tests": isolated_joint_tests,
     "arm_pose_rms_displacement": round(arm_rms, 6),
     "leg_pose_rms_displacement": round(leg_rms, 6),
     "leg_pose_tests": leg_pose_tests,
@@ -558,7 +608,11 @@ report = {
         "expected_bones_present": not missing,
         "armature_modifier_linked": bool(arm_mods),
         "arm_pose_deforms_mesh": arm_rms > 0.002,
-        "leg_pose_deforms_mesh": leg_rms > 0.002
+        "leg_pose_deforms_mesh": leg_rms > 0.002,
+        "all_six_leg_joints_deform": len(isolated_joint_tests) == 6 and all(
+            test.get("deformation_detected", False)
+            for test in isolated_joint_tests.values()
+        )
     },
     "warning": "Pose checks verify visible mesh movement, not final Source-engine compatibility. Inspect joint deformation and texture/material conversion before release."
 }
