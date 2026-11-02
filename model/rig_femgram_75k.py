@@ -197,6 +197,8 @@ for v in mesh.data.vertices:
  foot_vertical=1.0-smoothstep(.040,.095,nz)
  foot_core=max(0.0,min(1.0,foot_lateral*foot_vertical))
  leg_mask=max(0.0,min(1.0,max(lateral*vertical,knee_core,proximity*vertical,foot_core)))
+ if foot_core >= 0.995:
+  leg_mask=1.0
  
  if leg_mask > 0.001:
   # Stable anatomical partition: distance falloff must not overpower the
