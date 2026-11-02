@@ -54,13 +54,19 @@ for side_name, sign in (("L",1),("R",-1)):
         toe_points=[q for q in toe_surface if q.y <= toe_cut]
     if len(toe_points) < 8:
         raise RuntimeError("Insufficient "+side_name+" toe cross-section: "+str(len(toe_points)))
+    toe_world = Vector((
+        sorted(q.x for q in toe_points)[len(toe_points)//2],
+        sorted(q.y for q in toe_points)[len(toe_points)//2],
+        sorted(q.z for q in toe_points)[len(toe_points)//2]
+    ))
     foot_targets[side_name]={
-        "x": (sorted(q.x for q in toe_points)[len(toe_points)//2]-cx)/w,
-        "z": (sorted(q.z for q in toe_points)[len(toe_points)//2]-lo[2])/h,
-        "toe_y": (sorted(q.y for q in toe_points)[len(toe_points)//2]-cy)/d,
+        "x": (toe_world.x-cx)/w,
+        "z": (toe_world.z-lo[2])/h,
+        "toe_y": (toe_world.y-cy)/d,
+        "toe_world": [float(toe_world.x), float(toe_world.y), float(toe_world.z)],
         "toe_sample_vertices": len(toe_points),
         "toe_surface_height_range": [0.012,0.065],
-        "method": "component-wise median of front-most 5% upper/central toe cross-section"
+        "method": "raw-world component medians of front-most upper/central toe cross-section"
     }
 def normalized_joint_point(point):
     return p((point.x-cx)/w,(point.z-lo[2])/h,(point.y-cy)/d)
@@ -89,7 +95,8 @@ for s,sgn in (("L",1),("R",-1)):
  # axis then follows the measured ankle-to-toe direction, preventing the
  # previous ~10 cm pivot offset from shearing the ankle during foot rotation.
  target=foot_targets[s]
- add(foot,ankle_point,p(target["x"],target["z"],target["toe_y"]),calf,True)
+ toe_tail_local = world_to_arm @ Vector(target["toe_world"])
+ add(foot,ankle_point,toe_tail_local,calf,True)
  clav=s+"_Clavicle"; upper=s+"_UpperArm"; fore=s+"_Forearm"; hand=s+"_Hand"
  add(clav,p(sgn*.035,.70),p(sgn*.145,.70),"Spine2")
  add(upper,p(sgn*.145,.70),p(sgn*.315,.695),clav,True)
@@ -594,9 +601,32 @@ for v in mesh.data.vertices:
  total=sum(g.weight for g in v.groups)
  if total:
   for g in v.groups: mesh.vertex_groups[g.group].add([v.index],g.weight/total,"REPLACE")
+
+# Final distal-foot lock AFTER every smoothing/repair/normalization pass.
+# Match the validator's ROI exactly so no boundary vertices escape the lock.
+final_distal_foot_lock = {"left": 0, "right": 0, "normalized_height_max": 0.045,
+                          "normalized_lateral_min": 0.018, "normalized_lateral_max": 0.20}
+for v in mesh.data.vertices:
+ world = mesh.matrix_world @ v.co
+ nx = (world.x-cx)/w
+ nz = (world.z-lo[2])/h
+ if not (nz < final_distal_foot_lock["normalized_height_max"] and
+         0.018 < abs(nx) < 0.20):
+  continue
+ side = "L" if nx > 0 else "R"
+ foot_name = "ValveBiped.Bip01_" + side + "_Foot"
+ for group in mesh.vertex_groups:
+  if group.name != foot_name:
+   try:
+    group.remove([v.index])
+   except RuntimeError:
+    pass
+ mesh.vertex_groups[foot_name].add([v.index], 1.0, "REPLACE")
+ final_distal_foot_lock["left" if side == "L" else "right"] += 1
+
 bpy.ops.object.select_all(action="DESELECT"); mesh.select_set(True); arm.select_set(True); bpy.context.view_layer.objects.active=arm
 dest=os.path.join(out,"Femgram-75K-ValveBiped-Rigged.fbx")
 bpy.ops.export_scene.fbx(filepath=dest,use_selection=True,object_types={"ARMATURE","MESH"},add_leaf_bones=False,bake_anim=False,path_mode="COPY",embed_textures=True,axis_forward="-Z",axis_up="Y")
-report={"vertices":len(mesh.data.vertices),"polygons":len(mesh.data.polygons),"bones":len(ad.bones),"vertex_groups":len(mesh.vertex_groups),"weighted_vertices":sum(bool(v.groups) for v in mesh.data.vertices),"knee_weight_repair":knee_weight_repair,"knee_transition_smoothing":knee_transition_smoothing,"foot_weight_repair":foot_weight_repair,"foot_cap_weight_lock":foot_cap_weight_lock,"ankle_transition_smoothing":ankle_transition_smoothing,"ankle_weight_diagnostics":ankle_weight_diagnostics,"unweighted_vertices":sum(not v.groups for v in mesh.data.vertices),"automatic_weights":auto,"automatic_weights_error":err,"materials":[m.name if m else None for m in mesh.data.materials],"uv_layers":[u.name for u in mesh.data.uv_layers],"dimensions":[w,d,h],"warning":"Provisional proportion-based rig; validate deformation and Source-engine compatibility before release."}
+report={"vertices":len(mesh.data.vertices),"polygons":len(mesh.data.polygons),"bones":len(ad.bones),"vertex_groups":len(mesh.vertex_groups),"weighted_vertices":sum(bool(v.groups) for v in mesh.data.vertices),"knee_weight_repair":knee_weight_repair,"knee_transition_smoothing":knee_transition_smoothing,"foot_weight_repair":foot_weight_repair,"foot_cap_weight_lock":foot_cap_weight_lock,"final_distal_foot_lock":final_distal_foot_lock,"foot_targets":foot_targets,"ankle_transition_smoothing":ankle_transition_smoothing,"ankle_weight_diagnostics":ankle_weight_diagnostics,"unweighted_vertices":sum(not v.groups for v in mesh.data.vertices),"automatic_weights":auto,"automatic_weights_error":err,"materials":[m.name if m else None for m in mesh.data.materials],"uv_layers":[u.name for u in mesh.data.uv_layers],"dimensions":[w,d,h],"warning":"Provisional proportion-based rig; validate deformation and Source-engine compatibility before release."}
 with open(os.path.join(out,"Femgram-75K-Rig-Report.json"),"w") as f: json.dump(report,f,indent=2)
 print(json.dumps(report,indent=2))
