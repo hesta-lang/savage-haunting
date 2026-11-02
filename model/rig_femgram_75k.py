@@ -1,5 +1,5 @@
 import bpy, os, json, math
-from mathutils import Vector
+from mathutils import Vector, Matrix
 
 src=os.environ["SOURCE_FBX"]; out=os.environ.get("OUTPUT_DIR","dist/rigged")
 os.makedirs(out,exist_ok=True)
@@ -73,9 +73,12 @@ def normalized_joint_point(point):
 # Match the armature object transform to the imported mesh. Bone positions are
 # authored in mesh world coordinates and converted to armature-local coordinates.
 mesh_world=mesh.matrix_world.copy()
-world_to_arm=mesh_world.inverted_safe()
+# Keep the armature object at identity and author all bones in the same
+# world-space frame as the source mesh. This avoids FBX exporter double-
+# applying the imported mesh transform to bone endpoints.
+world_to_arm=Matrix.Identity(4)
 ad=bpy.data.armatures.new("Femgram_ValveBiped"); arm=bpy.data.objects.new("Femgram_ValveBiped",ad); bpy.context.collection.objects.link(arm)
-arm.matrix_world=mesh_world
+arm.matrix_world=Matrix.Identity(4)
 bpy.context.view_layer.objects.active=arm; arm.select_set(True); bpy.ops.object.mode_set(mode="EDIT")
 eb={}; segments=[]
 def add(n,a,b,parent=None,connected=False):
