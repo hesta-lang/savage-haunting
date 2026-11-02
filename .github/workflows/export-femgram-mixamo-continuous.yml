@@ -1,5 +1,10 @@
 name: Build Femgram Continuous Mixamo FBX
 on:
+  push:
+    branches: [main]
+    paths:
+      - "model/export_femgram_mixamo_continuous.py"
+      - ".github/workflows/export-femgram-mixamo-continuous.yml"
   workflow_dispatch:
     inputs:
       source_run_id:
