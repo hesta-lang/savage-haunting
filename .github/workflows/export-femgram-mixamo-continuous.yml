@@ -1,0 +1,45 @@
+name: Build Femgram Continuous Mixamo FBX
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Source run containing the Mixamo-ready FBX
+        required: true
+        default: "41385511641"
+permissions:
+  actions: read
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download source
+        uses: actions/download-artifact@v4
+        with:
+          name: Femgram-75K-Mixamo-Ready
+          path: source
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id }}
+      - name: Install Blender
+        run: sudo apt-get update && sudo apt-get install -y blender
+      - name: Locate source
+        id: src
+        run: |
+          FILE="$(find source -name '*.fbx' | head -n 1)"
+          test -n "$FILE"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+      - name: Export continuous surface
+        run: |
+          blender -b --python-exit-code 1 --python model/export_femgram_mixamo_continuous.py -- "${{ steps.src.outputs.file }}" "$RUNNER_TEMP/Femgram-Mixamo-Continuous.fbx"
+      - name: Package
+        run: |
+          mkdir -p output
+          cp "$RUNNER_TEMP/Femgram-Mixamo-Continuous.fbx" output/
+          echo "Continuous mesh for Mixamo; no rig data." > output/README.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Femgram-Mixamo-Continuous
+          path: output/
+          if-no-files-found: error
