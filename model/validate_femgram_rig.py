@@ -992,6 +992,8 @@ for bone_name in sorted(bone_names):
     }
 
 # Detailed lower-limb property and anatomical centering audit.
+# The regression guard requires both knee and ankle pivots to remain within
+# 1.5 cm of the measured mesh cross-section center on both sides.
 # Cross-section centers are measured from the imported mesh in world space;
 # this avoids comparing armature-local coordinates with mesh-local bounds.
 lower_limb_audit = {}
@@ -1206,6 +1208,11 @@ report = {
         "all_six_leg_joints_deform": len(isolated_joint_tests) == 6 and all(
             test.get("deformation_detected", False)
             for test in isolated_joint_tests.values()
+        ),
+        "knee_and_ankle_pivots_centered": all(
+            lower_limb_audit[side]["joint_centering"][joint].get("offset_distance", 999.0) <= 0.015
+            for side in ("left", "right")
+            for joint in ("knee", "ankle")
         )
     },
     "warning": "Pose checks verify visible mesh movement, not final Source-engine compatibility. Inspect joint deformation and texture/material conversion before release."
