@@ -30,7 +30,7 @@ jobs:
           path: dist/source
           repository: hesta-lang/savage-haunting
           run-id: 41332889809
-          github-token: \${{ github.token }}
+          github-token: ${{ github.token }}
 
       - name: Locate source FBX
         id: source
@@ -53,9 +53,9 @@ jobs:
 
       - name: Pose knees at 45 and 90 degrees and render
         env:
-          SOURCE_FBX: \${{ steps.source.outputs.file }}
-          OUTPUT_DIR: \${{ github.workspace }}/dist/knee-deformation
-          GITHUB_WORKSPACE: \${{ github.workspace }}
+          SOURCE_FBX: ${{ steps.source.outputs.file }}
+          OUTPUT_DIR: ${{ github.workspace }}/dist/knee-deformation
+          GITHUB_WORKSPACE: ${{ github.workspace }}
         run: |
           set -euo pipefail
           /tmp/blender-4.4.3-linux-x64/blender --background --python model/test_femgram_knee_deformation.py
