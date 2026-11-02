@@ -228,7 +228,7 @@ for v in mesh.data.vertices:
         "neighbor_count": len(neighbor_samples),
         "inherited_weights": avg
     })
-\nmod=mesh.modifiers.new("Femgram Armature","ARMATURE")
+mod=mesh.modifiers.new("Femgram Armature","ARMATURE")
 mod.object=arm
 # Preserve the mesh world transform when parenting it to the armature.
 mesh.parent=arm
