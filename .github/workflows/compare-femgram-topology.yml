@@ -14,7 +14,8 @@ permissions:
 # Avoid wasting runner time on superseded comparison builds.
 concurrency:
   group: femgram-topology-comparison-${{ github.ref }}
-  cancel-in-progress: true
+  # Keep the active comparison running; newer commits wait in the queue.
+  cancel-in-progress: false
 
 jobs:
   compare:
