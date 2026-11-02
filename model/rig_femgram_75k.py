@@ -194,7 +194,7 @@ for v in mesh.data.vertices:
         nw = mesh.matrix_world @ nv.co
         nnx = (nw.x - cx) / w
         nnz = (nw.z - lo[2]) / h
-        if not (0.20 <= nnz < 0.29 and nnx * nx > 0):
+        if not (0.17 <= nnz < 0.32 and nnx * nx > 0):
             continue
         nweights = {group_index_to_name[g.group]: g.weight for g in nv.groups}
         nleg = nweights.get(thigh_name, 0.0) + nweights.get(calf_name, 0.0)
