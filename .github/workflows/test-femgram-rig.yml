@@ -5,6 +5,8 @@ on:
     branches: [beta/gmod-addon]
     paths:
       - ".github/workflows/test-femgram-rig.yml"
+      - "model/rig_femgram_75k.py"
+      - "model/validate_femgram_rig.py"
   workflow_dispatch:
 
 permissions:
