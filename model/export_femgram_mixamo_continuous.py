@@ -1,3 +1,4 @@
+# Mixamo continuous-surface export
 import bpy
 import sys
 import json
