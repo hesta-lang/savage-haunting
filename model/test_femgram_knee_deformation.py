@@ -169,8 +169,7 @@ def render_knee(side, angle):
         "render": os.path.basename(path)
     }
     bpy.data.objects.remove(cam, do_unlink=True) if bpy.data.objects.get("KneeTestCamera") else None
-    if not finite or moved == 0 or not strain_passed:
-        raise RuntimeError("Knee deformation quality test failed: " + str(result))
+    result["quality_passed"] = bool(finite and moved > 0 and strain_passed)
     return result
 
 results = []
@@ -201,3 +200,6 @@ report = {
 with open(os.path.join(OUT, "Femgram-Knee-Deformation-Report.json"), "w") as f:
     json.dump(report, f, indent=2)
 print(json.dumps(report, indent=2))
+failed = [item for item in results if not item.get("quality_passed", False)]
+if failed:
+    raise RuntimeError("One or more knee poses failed quality gates; see complete four-pose report: " + str(failed))
