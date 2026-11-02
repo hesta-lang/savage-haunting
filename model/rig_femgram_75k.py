@@ -207,7 +207,7 @@ for v in mesh.data.vertices:
   # Stable anatomical partition: distance falloff must not overpower the
   # knee/ankle blend or pull the foot back onto the calf.
   knee_blend=smoothstep(.18,.34,nz)
-  foot_blend=1.0-smoothstep(.045,.090,nz)
+  foot_blend=1.0-smoothstep(.045,.120,nz)
   priors={
    side+"_Thigh": knee_blend,
    side+"_Calf": (1.0-knee_blend)*(1.0-foot_blend),
@@ -361,7 +361,9 @@ for side_name, sign in (("L", 1), ("R", -1)):
 # Work on the normalized Calf/Foot share only; preserve each vertex's total
 # lower-limb influence and leave Thigh/Pelvis and the source geometry untouched.
 ankle_transition_smoothing = {"left": [], "right": [], "iterations": 4, "factor": 0.30,
-                               "normalized_height_band": [0.045, 0.135]}
+                               "normalized_height_band": [0.045, 0.135],
+                               "foot_blend_height_range": [0.045, 0.120],
+                               "method": "widened calf-to-foot blend through the ankle joint, then topology smoothing"}
 for side_name, sign in (("L", 1), ("R", -1)):
     calf_name = "ValveBiped.Bip01_" + side_name + "_Calf"
     foot_name = "ValveBiped.Bip01_" + side_name + "_Foot"
