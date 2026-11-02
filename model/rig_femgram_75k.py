@@ -78,6 +78,7 @@ for side_name in ("L", "R"):
  for part in ("Thigh", "Calf"):
   eb[side_name+"_"+part].align_roll(Vector((0.0, 1.0, 0.0)))
  eb[side_name+"_Foot"].align_roll(Vector((0.0, 0.0, 1.0)))
+bpy.ops.object.mode_set(mode="OBJECT"); arm.show_in_front=True
 # Explicit lower-limb deformation settings.
 # Rotation inheritance carries the foot naturally during calf flexion, while
 # NONE prevents inherited scale/shear from changing the child foot frame.
@@ -96,7 +97,6 @@ for side_name in ("L", "R"):
   child_bone = ad.bones["ValveBiped.Bip01_" + side_name + "_" + child_part]
   if not child_bone.use_connect or (child_bone.head_local-parent_bone.tail_local).length > 1e-5:
    raise RuntimeError("Disconnected lower-limb joint: " + side_name + " " + child_part)
-bpy.ops.object.mode_set(mode="OBJECT"); arm.show_in_front=True
 # Controlled anatomical weights: avoid Blender heat weights bleeding across limbs.
 # The model is a proportion-based T-pose; use region + side filtering and at most
 # three nearby bones so opposite limbs and fingers cannot steal influence.
