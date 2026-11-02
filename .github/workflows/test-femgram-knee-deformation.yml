@@ -64,8 +64,17 @@ jobs:
           test -s dist/knee-deformation/Femgram-Knee-R-45deg.png
           test -s dist/knee-deformation/Femgram-Knee-R-90deg.png
           test -s dist/knee-deformation/Femgram-Knee-Deformation-Report.json
+          python - <<'PY'
+          import json
+          with open("dist/knee-deformation/Femgram-Knee-Deformation-Report.json", encoding="utf-8") as f:
+              report = json.load(f)
+          results = report.get("results", [])
+          if len(results) != 4 or not all(item.get("quality_passed") is True for item in results):
+              raise SystemExit("Knee deformation quality gate failed: " + json.dumps(results, sort_keys=True))
+          PY
 
       - name: Upload knee deformation test
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Femgram-Knee-Deformation-Test
