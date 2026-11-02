@@ -206,7 +206,7 @@ for v in mesh.data.vertices:
  if leg_mask > 0.001:
   # Stable anatomical partition: distance falloff must not overpower the
   # knee/ankle blend or pull the foot back onto the calf.
-  knee_blend=smoothstep(.215,.315,nz)
+  knee_blend=smoothstep(.18,.34,nz)
   foot_blend=1.0-smoothstep(.045,.090,nz)
   priors={
    side+"_Thigh": knee_blend,
@@ -305,8 +305,8 @@ for v in mesh.data.vertices:
 # Smooth only the normalized Thigh/Calf share over mesh-connected knee vertices;
 # preserve total lower-limb influence and never reintroduce Pelvis or Foot weight.
 knee_transition_smoothing = {
-    "left": [], "right": [], "iterations": 8, "factor": 0.35,
-    "normalized_height_band": [0.17, 0.36],
+    "left": [], "right": [], "iterations": 12, "factor": 0.45,
+    "normalized_height_band": [0.15, 0.38],
     "preserves_total_leg_weight": True,
     "pelvis_weight_added": False
 }
@@ -318,7 +318,7 @@ for side_name, sign in (("L", 1), ("R", -1)):
         world = mesh.matrix_world @ vtx.co
         nx = (world.x - cx) / w
         nz = (world.z - lo[2]) / h
-        if nx * sign <= 0.025 or not (0.17 <= nz <= 0.36):
+        if nx * sign <= 0.025 or not (0.15 <= nz <= 0.38):
             continue
         weights = {group_index_to_name[g.group]: g.weight for g in vtx.groups}
         leg_total = weights.get(thigh_name, 0.0) + weights.get(calf_name, 0.0)
