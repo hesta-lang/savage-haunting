@@ -760,6 +760,137 @@ for side, side_test, prefix, angle in (
         reset_pose()
 
 
+
+# Surface strain diagnostics: separate rigid/ordinary bone motion from actual
+# local stretching. Compare evaluated edge lengths and triangle areas against
+# the rest mesh, rather than treating absolute vertex displacement as damage.
+mesh.data.calc_loop_triangles()
+rest_world = [mesh.matrix_world @ v.co for v in verts]
+topology_edges = [(e.vertices[0], e.vertices[1]) for e in mesh.data.edges]
+topology_triangles = [tuple(t.vertices) for t in mesh.data.loop_triangles]
+neighbor_map = [[] for _ in verts]
+for a, b in topology_edges:
+    neighbor_map[a].append(b)
+    neighbor_map[b].append(a)
+
+def percentile_float(values, p):
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    return float(ordered[min(len(ordered)-1, int(round((len(ordered)-1)*p)))])
+
+def triangle_area(points, tri):
+    a, b, c = (points[tri[0]], points[tri[1]], points[tri[2]])
+    return 0.5 * (b-a).cross(c-a).length
+
+def surface_strain_report(base_points, posed_points, roi_indices):
+    roi = set(roi_indices)
+    edge_rows = []
+    for a, b in topology_edges:
+        if a not in roi and b not in roi:
+            continue
+        rest_len = (base_points[a]-base_points[b]).length
+        posed_len = (posed_points[a]-posed_points[b]).length
+        if rest_len > 1e-9:
+            ratio = posed_len/rest_len
+            edge_rows.append((abs(ratio-1.0), ratio, a, b))
+    area_rows = []
+    for tri in topology_triangles:
+        if not any(i in roi for i in tri):
+            continue
+        rest_area = triangle_area(base_points, tri)
+        posed_area = triangle_area(posed_points, tri)
+        if rest_area > 1e-12:
+            ratio = posed_area/rest_area
+            area_rows.append((abs(ratio-1.0), ratio, tri))
+    # A vertex's displacement vector is compared with the mean displacement
+    # of its immediate surface neighbors. This is a local shear/outlier signal,
+    # not a rigid-motion test by itself; edge strain remains the primary metric.
+    displacement = [posed_points[i]-base_points[i] for i in range(len(base_points))]
+    local_rows = []
+    for idx in roi:
+        ns = neighbor_map[idx]
+        if not ns:
+            continue
+        mean_neighbor = sum((displacement[j] for j in ns), Vector()) / len(ns)
+        local_rows.append((float((displacement[idx]-mean_neighbor).length), idx))
+    edge_dev = [r[0] for r in edge_rows]
+    area_dev = [r[0] for r in area_rows]
+    local_dev = [r[0] for r in local_rows]
+    worst_edges = sorted(edge_rows, reverse=True)[:20]
+    worst_faces = sorted(area_rows, reverse=True)[:20]
+    worst_vertices = sorted(local_rows, reverse=True)[:20]
+    return {
+        "roi_vertices": len(roi),
+        "tested_edges": len(edge_rows),
+        "edge_length_relative_change": {
+            "mean_absolute": round(sum(edge_dev)/max(1,len(edge_dev)), 8),
+            "p50": round(percentile_float(edge_dev,0.50), 8),
+            "p95": round(percentile_float(edge_dev,0.95), 8),
+            "p99": round(percentile_float(edge_dev,0.99), 8),
+            "max": round(max(edge_dev, default=0.0), 8),
+            "edges_over_5_percent": sum(v > 0.05 for v in edge_dev),
+            "edges_over_10_percent": sum(v > 0.10 for v in edge_dev),
+            "edges_over_25_percent": sum(v > 0.25 for v in edge_dev)
+        },
+        "triangle_area_relative_change": {
+            "tested_triangles": len(area_rows),
+            "mean_absolute": round(sum(area_dev)/max(1,len(area_dev)), 8),
+            "p95": round(percentile_float(area_dev,0.95), 8),
+            "p99": round(percentile_float(area_dev,0.99), 8),
+            "max": round(max(area_dev, default=0.0), 8),
+            "triangles_over_10_percent": sum(v > 0.10 for v in area_dev),
+            "triangles_over_25_percent": sum(v > 0.25 for v in area_dev)
+        },
+        "neighbor_displacement_deviation": {
+            "mean": round(sum(local_dev)/max(1,len(local_dev)), 8),
+            "p95": round(percentile_float(local_dev,0.95), 8),
+            "max": round(max(local_dev, default=0.0), 8)
+        },
+        "worst_edges": [
+            {"vertices":[a,b],"relative_length_change":round(dev,8),"length_ratio":round(ratio,8)}
+            for dev,ratio,a,b in worst_edges
+        ],
+        "worst_triangles": [
+            {"vertices":list(tri),"relative_area_change":round(dev,8),"area_ratio":round(ratio,8)}
+            for dev,ratio,tri in worst_faces
+        ],
+        "worst_vertices": [
+            {"vertex":idx,"neighbor_displacement_deviation":round(dev,8)}
+            for dev,idx in worst_vertices
+        ],
+        "interpretation": "Edge-length and triangle-area changes measure local surface strain; absolute vertex displacement alone is not classified as stretching."
+    }
+
+surface_strain_diagnostics = {}
+for side, side_test, prefix, calf_angle, foot_angle in (
+    ("left", lambda v: nx(v) > 0.025, "L", -0.65, 0.45),
+    ("right", lambda v: nx(v) < -0.025, "R", 0.65, -0.45)
+):
+    foot_roi = [v.index for v in verts if side_test(v) and nz(v) < 0.075]
+    calf_roi = [v.index for v in verts if side_test(v) and 0.075 <= nz(v) < 0.20]
+    lower_leg_roi = foot_roi + calf_roi
+    scenarios = [
+        ("calf_only", [("Calf", calf_angle)], lower_leg_roi),
+        ("foot_only", [("Foot", foot_angle)], foot_roi),
+        ("calf_plus_foot_counterrotation", [("Calf", calf_angle), ("Foot", -calf_angle)], lower_leg_roi)
+    ]
+    for label, rotations, roi in scenarios:
+        reset_pose()
+        for part, value in rotations:
+            arm.pose.bones["ValveBiped.Bip01_" + prefix + "_" + part].rotation_euler.x = value
+        bpy.context.view_layer.update()
+        posed = sampled_positions(all_indices)
+        key = side + "_" + label
+        surface_strain_diagnostics[key] = {
+            "rotation_radians": {part:value for part,value in rotations},
+            "foot_surface": surface_strain_report(rest_world, posed, foot_roi),
+            "calf_surface": surface_strain_report(rest_world, posed, calf_roi),
+            "combined_lower_leg_surface": surface_strain_report(rest_world, posed, lower_leg_roi)
+        }
+        reset_pose()
+
+
 # Bone-placement audit: export the actual rest-pose endpoints and render a visible
 # skeleton overlay. This is separate from skinning/pose tests.
 bone_audit = {}
@@ -952,6 +1083,7 @@ report = {
     "knee_vertex_audit": knee_vertex_audit,
     "foot_geometry_measurements": foot_geometry_measurements,
     "joint_isolation_diagnostics": joint_isolation_diagnostics,
+    "surface_strain_diagnostics": surface_strain_diagnostics,
     "three_way_knee_comparison": knee_comparison,
     "pose_tests": pose_tests,
     "isolated_leg_joint_tests": isolated_joint_tests,
