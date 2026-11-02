@@ -592,6 +592,53 @@ bpy.context.view_layer.update()
 # provide the visual check without duplicating the same deformation views.
 
 
+
+# Isolated lower-leg tests: calf-only, foot-only, and calf with child-foot
+# local counter-rotation. These report measured movement, not pass/fail claims.
+joint_isolation_diagnostics = {}
+joint_isolation_render_names = []
+def region_displacement(base, posed, indices):
+    values = [(posed[i] - base[i]).length for i in indices if i < min(len(base), len(posed))]
+    if not values:
+        return {"vertices": 0, "rms": 0.0, "max": 0.0}
+    return {"vertices": len(values),
+            "rms": round(math.sqrt(sum(v*v for v in values) / len(values)), 8),
+            "max": round(max(values), 8)}
+
+for side, side_test, prefix, angle in (
+    ("left", lambda v: nx(v) > 0.025, "L", -0.65),
+    ("right", lambda v: nx(v) < -0.025, "R", 0.65)
+):
+    foot_roi = [v.index for v in verts if side_test(v) and nz(v) < 0.075]
+    calf_roi = [v.index for v in verts if side_test(v) and 0.075 <= nz(v) < 0.20]
+    base = sampled_positions(all_indices)
+    experiments = [
+        ("calf_only", [("Calf", angle)]),
+        ("foot_only", [("Foot", 0.45 if prefix == "L" else -0.45)]),
+        ("calf_with_foot_counterrotation", [("Calf", angle), ("Foot", -angle)])
+    ]
+    for label, rotations in experiments:
+        reset_pose()
+        for part, value in rotations:
+            pb = arm.pose.bones["ValveBiped.Bip01_" + prefix + "_" + part]
+            pb.rotation_mode = "XYZ"
+            pb.rotation_euler.x = value
+        bpy.context.view_layer.update()
+        posed = sampled_positions(all_indices)
+        key = side + "_" + label
+        joint_isolation_diagnostics[key] = {
+            "rotations_radians": {part: value for part, value in rotations},
+            "whole_mesh": region_displacement(base, posed, all_indices),
+            "ankle_foot_region": region_displacement(base, posed, foot_roi),
+            "calf_region": region_displacement(base, posed, calf_roi),
+            "note": "Child-foot counter-rotation is approximate; use measured displacement to compare cases."
+        }
+        image_name = "Femgram-isolation-" + side + "-" + label
+        render(image_name, "left")
+        joint_isolation_render_names.append(image_name + ".png")
+        reset_pose()
+
+
 # Bone-placement audit: export the actual rest-pose endpoints and render a visible
 # skeleton overlay. This is separate from skinning/pose tests.
 bone_audit = {}
@@ -677,14 +724,14 @@ report = {
     "vertex_groups": len(mesh.vertex_groups),
     "geometry_diagnostics": geometry_diagnostics,
     "knee_vertex_audit": knee_vertex_audit,
-    "foot_geometry_measurements": foot_geometry_measurements,
+    "foot_geometry_measurements": foot_geometry_measurements,\n    "joint_isolation_diagnostics": joint_isolation_diagnostics,
     "pose_tests": pose_tests,
     "isolated_leg_joint_tests": isolated_joint_tests,
     "arm_pose_rms_displacement": round(arm_rms, 6),
     "leg_pose_rms_displacement": round(leg_rms, 6),
     "leg_pose_tests": leg_pose_tests,
     "bone_rest_pose_world": bone_audit,
-    "renders": ["Femgram-bones-front.png", "Femgram-bones-side.png", "Femgram-neutral.png", "Femgram-leg-pose-left-knee-only-front.png", "Femgram-leg-pose-left-knee-only-side.png", "Femgram-leg-pose-right-knee-only-front.png", "Femgram-leg-pose-right-knee-only-side.png"],
+    "renders": ["Femgram-bones-front.png", "Femgram-bones-side.png", "Femgram-neutral.png", "Femgram-leg-pose-left-knee-only-front.png", "Femgram-leg-pose-left-knee-only-side.png", "Femgram-leg-pose-right-knee-only-front.png", "Femgram-leg-pose-right-knee-only-side.png"] + joint_isolation_render_names,
     "checks": {
         "mesh_and_armature_present": bool(meshes and arms),
         "all_vertices_weighted": weighted == len(verts),
