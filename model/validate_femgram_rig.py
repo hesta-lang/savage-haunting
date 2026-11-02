@@ -520,7 +520,7 @@ else:
         if smooth_weights:
             smooth_knee_weights()
         reset_pose()
-        base = sampled_positions(all_indices)
+        base = sampled_positions(range(len(verts)))
         case = {"preserve_volume": preserve_volume,
                 "knee_weight_smoothing": {
                     "enabled": smooth_weights,
@@ -535,7 +535,7 @@ else:
                 pb.rotation_mode = "XYZ"
                 pb.rotation_euler.x = angle
             bpy.context.view_layer.update()
-            posed = sampled_positions(all_indices)
+            posed = sampled_positions(range(len(verts)))
             roi = [v.index for v in verts
                    if (nx(v) > 0.025 if prefix == "L" else nx(v) < -0.025)
                    and 0.18 <= nz(v) < 0.33]
