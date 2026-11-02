@@ -1236,7 +1236,8 @@ report = {
             test.get("deformation_detected", False)
             for test in isolated_joint_tests.values()
         ),
-        "foot_bone_endpoints_on_surface": all(not foot_endpoint_audit[s]["outside_foot_surface_bounds"] for s in ("left", "right")),\n        "knee_and_ankle_pivots_centered": all(
+        "foot_bone_endpoints_on_surface": all(not foot_endpoint_audit[s]["outside_foot_surface_bounds"] for s in ("left", "right")),
+        "knee_and_ankle_pivots_centered": all(
             lower_limb_audit[side]["joint_centering"][joint].get("offset_distance", 999.0) <= 0.015
             for side in ("left", "right")
             for joint in ("knee", "ankle")
