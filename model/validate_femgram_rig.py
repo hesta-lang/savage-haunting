@@ -848,7 +848,25 @@ def surface_strain_report(base_points, posed_points, roi_indices):
             "max": round(max(local_dev, default=0.0), 8)
         },
         "worst_edges": [
-            {"vertices":[a,b],"relative_length_change":round(dev,8),"length_ratio":round(ratio,8)}
+            {
+                "vertices":[a,b],
+                "relative_length_change":round(dev,8),
+                "length_ratio":round(ratio,8),
+                "vertex_details":[
+                    {
+                        "vertex": idx,
+                        "world_position":[round(float(x),6) for x in (mesh.matrix_world @ verts[idx].co)],
+                        "weights":{
+                            name: round(float(next((item.weight for item in verts[idx].groups if mesh.vertex_groups[item.group].name == name),0.0)),6)
+                            for name in (
+                                "ValveBiped.Bip01_" + ("L" if (mesh.matrix_world @ verts[idx].co).x >= 0 else "R") + "_Calf",
+                                "ValveBiped.Bip01_" + ("L" if (mesh.matrix_world @ verts[idx].co).x >= 0 else "R") + "_Foot",
+                                "ValveBiped.Bip01_Pelvis"
+                            )
+                        }
+                    } for idx in (a,b)
+                ]
+            }
             for dev,ratio,a,b in worst_edges
         ],
         "worst_triangles": [
