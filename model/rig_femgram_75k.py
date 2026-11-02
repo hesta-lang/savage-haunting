@@ -305,10 +305,12 @@ for v in mesh.data.vertices:
 # Smooth only the normalized Thigh/Calf share over mesh-connected knee vertices;
 # preserve total lower-limb influence and never reintroduce Pelvis or Foot weight.
 knee_transition_smoothing = {
-    "left": [], "right": [], "iterations": 8, "factor": 0.35,
-    "normalized_height_band": [0.20, 0.31],
+    "left": [], "right": [], "iterations": 12, "factor": 0.40,
+    "normalized_height_band": [0.17, 0.35],
     "preserves_total_leg_weight": True,
-    "pelvis_weight_added": False
+    "pelvis_weight_added": False,
+    "topology_preserved": True,
+    "method": "bilateral mesh-adjacency smoothing of normalized thigh/calf shares"
 }
 for side_name, sign in (("L", 1), ("R", -1)):
     thigh_name = "ValveBiped.Bip01_" + side_name + "_Thigh"
@@ -318,7 +320,7 @@ for side_name, sign in (("L", 1), ("R", -1)):
         world = mesh.matrix_world @ vtx.co
         nx = (world.x - cx) / w
         nz = (world.z - lo[2]) / h
-        if nx * sign <= 0.025 or not (0.15 <= nz <= 0.38):
+        if nx * sign <= 0.025 or not (0.17 <= nz <= 0.35):
             continue
         weights = {group_index_to_name[g.group]: g.weight for g in vtx.groups}
         leg_total = weights.get(thigh_name, 0.0) + weights.get(calf_name, 0.0)
