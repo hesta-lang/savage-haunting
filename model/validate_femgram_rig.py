@@ -1147,6 +1147,31 @@ for obj in overlay_objects:
     obj.hide_render = True
 
 
+# Regression guard for the medial/distal foot edge. These vertices are
+# inside the exposed foot envelope where the rig generator now guarantees a
+# pure Foot influence; even a small Pelvis remainder can create severe shear.
+distal_foot_weight_audit = {}
+for side_name, sign in (("left", 1), ("right", -1)):
+    prefix = "L" if side_name == "left" else "R"
+    foot_name = "ValveBiped.Bip01_" + prefix + "_Foot"
+    pelvis_name = "ValveBiped.Bip01_Pelvis"
+    indices = [v.index for v in verts
+               if nx(v) * sign > 0.018 and abs(nx(v)) < 0.20 and nz(v) < 0.045]
+    residual = [
+        {"vertex": idx,
+         "foot_weight": round(float(vertex_weights[idx].get(foot_name, 0.0)), 6),
+         "pelvis_weight": round(float(vertex_weights[idx].get(pelvis_name, 0.0)), 6)}
+        for idx in indices
+        if vertex_weights[idx].get(foot_name, 0.0) < 0.999
+        or vertex_weights[idx].get(pelvis_name, 0.0) > 1e-5
+    ]
+    distal_foot_weight_audit[side_name] = {
+        "vertices": len(indices),
+        "vertices_with_invalid_weights": len(residual),
+        "worst_examples": residual[:20],
+        "passed": bool(indices) and not residual
+    }
+
 report = {
     "mesh_objects": len(meshes), "armature_objects": len(arms),
     "vertices": len(verts), "weighted_vertices": weighted,
@@ -1169,7 +1194,9 @@ report = {
     "lower_limb_bone_properties_and_centering": lower_limb_audit,
     "lower_limb_mirror_symmetry": lower_limb_symmetry,
     "renders": ["Femgram-bones-front.png", "Femgram-bones-side.png", "Femgram-neutral.png", "Femgram-leg-pose-left-knee-only-front.png", "Femgram-leg-pose-left-knee-only-side.png", "Femgram-leg-pose-right-knee-only-front.png", "Femgram-leg-pose-right-knee-only-side.png"] + joint_isolation_render_names,
+    "distal_foot_weight_audit": distal_foot_weight_audit,
     "checks": {
+        "distal_foot_weights_valid": all(v["passed"] for v in distal_foot_weight_audit.values()),
         "mesh_and_armature_present": bool(meshes and arms),
         "all_vertices_weighted": weighted == len(verts),
         "expected_bones_present": not missing,
