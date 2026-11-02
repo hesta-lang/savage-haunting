@@ -107,3 +107,5 @@ jobs:
           path: dist/validation/
           if-no-files-found: error
           retention-days: 30
+
+# Diagnostic validator updated; run the isolated joint experiment.
