@@ -1,13 +1,16 @@
 name: Femgram rig diagnostic test
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Rebuild Femgram rig with corrected armature transform"]
+    types: [completed]
     branches: [beta/gmod-addon]
-    paths:
-      - ".github/workflows/test-femgram-rig.yml"
-      - "model/rig_femgram_75k.py"
-      - "model/validate_femgram_rig.py"
   workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Successful rebuild workflow run ID containing Femgram-75K-ValveBiped-Rigged-Corrected"
+        required: true
+        type: string
 
 permissions:
   actions: read
@@ -15,27 +18,28 @@ permissions:
 
 jobs:
   rebuild-and-validate:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout diagnostic branch
         uses: actions/checkout@v4
         with:
-          ref: beta/gmod-addon
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
 
-      - name: Download approved 75K source FBX
+      - name: Download rig from successful rebuild
         uses: actions/download-artifact@v4
         with:
-          name: Femgram-75K-ValveBiped-Rigged
-          path: dist/source
+          name: Femgram-75K-ValveBiped-Rigged-Corrected
+          path: dist/rigged
           repository: hesta-lang/savage-haunting
-          run-id: 41332889809
+          run-id: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || inputs.run_id }}
           github-token: ${{ github.token }}
 
-      - name: Locate source FBX
-        id: source
+      - name: Locate rigged FBX
+        id: rig
         run: |
           set -euo pipefail
-          FILE="$(find dist/source -type f -iname '*.fbx' -print -quit)"
+          FILE="$(find dist/rigged -type f -iname '*.fbx' -print -quit)"
           test -n "$FILE"
           echo "file=$FILE" >> "$GITHUB_OUTPUT"
 
@@ -68,19 +72,9 @@ jobs:
           tar -xJf /tmp/blender.tar.xz -C /tmp
           rm -f /tmp/blender.tar.xz
 
-      - name: Generate diagnostic ValveBiped rig
+      - name: Validate isolated knee flexion and render diagnostics
         env:
-          SOURCE_FBX: ${{ steps.source.outputs.file }}
-          OUTPUT_DIR: ${{ github.workspace }}/dist/rigged
-        run: |
-          set -euo pipefail
-          /tmp/blender-4.4.3-linux-x64/blender --background --python model/rig_femgram_75k.py
-          test -s dist/rigged/Femgram-75K-ValveBiped-Rigged.fbx
-          test -s dist/rigged/Femgram-75K-Rig-Report.json
-
-      - name: Validate fixed-axis joint flexion and render diagnostics
-        env:
-          RIGGED_FBX: ${{ github.workspace }}/dist/rigged/Femgram-75K-ValveBiped-Rigged.fbx
+          RIGGED_FBX: ${{ steps.rig.outputs.file }}
           OUTPUT_DIR: ${{ github.workspace }}/dist/validation
         run: |
           set -euo pipefail
@@ -94,14 +88,6 @@ jobs:
           test -s dist/validation/Femgram-leg-pose-right-knee-only-front.png
           test -s dist/validation/Femgram-leg-pose-right-knee-only-side.png
 
-      - name: Upload diagnostic rigged FBX
-        uses: actions/upload-artifact@v4
-        with:
-          name: Femgram-Diagnostic-Rigged-FBX
-          path: dist/rigged/
-          if-no-files-found: error
-          retention-days: 30
-
       - name: Upload diagnostic report and renders
         uses: actions/upload-artifact@v4
         with:
@@ -109,5 +95,3 @@ jobs:
           path: dist/validation/
           if-no-files-found: error
           retention-days: 30
-
-# Diagnostic validator updated; run the isolated joint experiment.
