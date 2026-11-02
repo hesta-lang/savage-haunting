@@ -1,0 +1,69 @@
+name: Export Femgram Mixamo Ready FBX
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Run ID containing the original rigged FBX artifact"
+        required: true
+        default: "41382670364"
+  push:
+    branches: [main]
+    paths:
+      - "model/export_femgram_mixamo_ready.py"
+      - ".github/workflows/export-femgram-mixamo-ready.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  export-mixamo-ready:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Download original 75K rigged source
+        uses: actions/download-artifact@v4
+        with:
+          name: Femgram-75K-ValveBiped-Rigged-Corrected
+          path: source
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id || '41382670364' }}
+
+      - name: Locate source FBX
+        id: source
+        shell: bash
+        run: |
+          FBX="$(find source -type f -iname '*.fbx' | head -n 1)"
+          test -n "$FBX"
+          echo "fbx=$FBX" >> "$GITHUB_OUTPUT"
+
+      - name: Install Blender
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender python3-numpy
+
+      - name: Export clean mesh-only FBX
+        env:
+          PYTHONPATH: /usr/lib/python3/dist-packages
+        run: |
+          blender -b --python-exit-code 1 --python model/export_femgram_mixamo_ready.py -- "${{ steps.source.outputs.fbx }}" "$RUNNER_TEMP/Femgram-75K-Mixamo-Ready.fbx"
+          test -s "$RUNNER_TEMP/Femgram-75K-Mixamo-Ready.fbx"
+
+      - name: Package result
+        run: |
+          mkdir -p output
+          cp "$RUNNER_TEMP/Femgram-75K-Mixamo-Ready.fbx" output/
+          printf '%s\\n' "Femgram Mixamo-ready mesh" "75,000 vertices" "Fresh mesh object and mesh datablock" "No armature, bones, vertex groups, or skin weights" > output/README.txt
+
+      - name: Upload FBX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Femgram-75K-Mixamo-Ready
+          path: output/
+          if-no-files-found: error
