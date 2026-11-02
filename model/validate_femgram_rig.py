@@ -689,6 +689,31 @@ for side_name, sign, prefix in (("left", 1, "L"), ("right", -1, "R")):
             "use_deform": bool(bone.use_deform),
             "inherit_scale": str(bone.inherit_scale),
             "inherit_rotation": bool(bone.use_inherit_rotation),
+            "rotation_mode": arm.pose.bones[name].rotation_mode,
+            "rotation_limits": [
+                {
+                    "name": constraint.name,
+                    "type": constraint.type,
+                    "owner_space": constraint.owner_space,
+                    "enabled_axes": {
+                        "x": bool(getattr(constraint, "use_limit_x", False)),
+                        "y": bool(getattr(constraint, "use_limit_y", False)),
+                        "z": bool(getattr(constraint, "use_limit_z", False))
+                    },
+                    "min_degrees": {
+                        "x": round(math.degrees(constraint.min_x), 3) if getattr(constraint, "use_limit_x", False) else None,
+                        "y": round(math.degrees(constraint.min_y), 3) if getattr(constraint, "use_limit_y", False) else None,
+                        "z": round(math.degrees(constraint.min_z), 3) if getattr(constraint, "use_limit_z", False) else None
+                    },
+                    "max_degrees": {
+                        "x": round(math.degrees(constraint.max_x), 3) if getattr(constraint, "use_limit_x", False) else None,
+                        "y": round(math.degrees(constraint.max_y), 3) if getattr(constraint, "use_limit_y", False) else None,
+                        "z": round(math.degrees(constraint.max_z), 3) if getattr(constraint, "use_limit_z", False) else None
+                    }
+                }
+                for constraint in arm.pose.bones[name].constraints
+                if constraint.type == "LIMIT_ROTATION"
+            ],
             "head_tail_connection_error": round(float(
                 (head - (arm.matrix_world @ bone.parent.tail_local)).length
             ), 8) if bone.use_connect and bone.parent else None
