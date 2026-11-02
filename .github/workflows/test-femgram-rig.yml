@@ -1,0 +1,109 @@
+name: Femgram rig diagnostic test
+
+on:
+  push:
+    branches: [beta/gmod-addon]
+    paths:
+      - ".github/workflows/test-femgram-rig.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  rebuild-and-validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout diagnostic branch
+        uses: actions/checkout@v4
+        with:
+          ref: beta/gmod-addon
+
+      - name: Download approved 75K source FBX
+        uses: actions/download-artifact@v4
+        with:
+          name: Femgram-75K-ValveBiped-Rigged
+          path: dist/source
+          repository: hesta-lang/savage-haunting
+          run-id: 41332889809
+          github-token: ${{ github.token }}
+
+      - name: Locate source FBX
+        id: source
+        run: |
+          set -euo pipefail
+          FILE="$(find dist/source -type f -iname '*.fbx' -print -quit)"
+          test -n "$FILE"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Blender runtime
+        id: blender-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/blender-4.4.3-linux-x64
+          key: blender-4.4.3-ubuntu-24.04-v1
+
+      - name: Install missing Blender system libraries
+        run: |
+          set -euo pipefail
+          missing=0
+          for lib in libEGL.so.1 libGL.so.1 libGLESv2.so.2 libgbm.so.1 libX11.so.6 libXi.so.6 libXrender.so.1 libXxf86vm.so.1 libXfixes.so.3 libxkbcommon.so.0; do
+            if ! ldconfig -p | grep -q "$lib"; then missing=1; fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            sudo apt-get update
+            sudo apt-get install -y libegl1 libgl1 libgles2 libgbm1 libx11-6 libxi6 libxrender1 libxxf86vm1 libxfixes3 libxkbcommon0
+          else
+            echo "All Blender runtime libraries are already available."
+          fi
+
+      - name: Download Blender runtime
+        if: steps.blender-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 https://download.blender.org/release/Blender4.4/blender-4.4.3-linux-x64.tar.xz -o /tmp/blender.tar.xz
+          tar -xJf /tmp/blender.tar.xz -C /tmp
+          rm -f /tmp/blender.tar.xz
+
+      - name: Generate diagnostic ValveBiped rig
+        env:
+          SOURCE_FBX: ${{ steps.source.outputs.file }}
+          OUTPUT_DIR: ${{ github.workspace }}/dist/rigged
+        run: |
+          set -euo pipefail
+          /tmp/blender-4.4.3-linux-x64/blender --background --python model/rig_femgram_75k.py
+          test -s dist/rigged/Femgram-75K-ValveBiped-Rigged.fbx
+          test -s dist/rigged/Femgram-75K-Rig-Report.json
+
+      - name: Validate fixed-axis joint flexion and render diagnostics
+        env:
+          RIGGED_FBX: ${{ github.workspace }}/dist/rigged/Femgram-75K-ValveBiped-Rigged.fbx
+          OUTPUT_DIR: ${{ github.workspace }}/dist/validation
+        run: |
+          set -euo pipefail
+          /tmp/blender-4.4.3-linux-x64/blender --background --python model/validate_femgram_rig.py
+          test -s dist/validation/Femgram-Rig-Validation.json
+          test -s dist/validation/Femgram-bones-front.png
+          test -s dist/validation/Femgram-bones-side.png
+          test -s dist/validation/Femgram-neutral.png
+          test -s dist/validation/Femgram-leg-pose-left-knee-only-front.png
+          test -s dist/validation/Femgram-leg-pose-left-knee-only-side.png
+          test -s dist/validation/Femgram-leg-pose-right-knee-only-front.png
+          test -s dist/validation/Femgram-leg-pose-right-knee-only-side.png
+
+      - name: Upload diagnostic rigged FBX
+        uses: actions/upload-artifact@v4
+        with:
+          name: Femgram-Diagnostic-Rigged-FBX
+          path: dist/rigged/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload diagnostic report and renders
+        uses: actions/upload-artifact@v4
+        with:
+          name: Femgram-Diagnostic-Report-and-Renders
+          path: dist/validation/
+          if-no-files-found: error
+          retention-days: 30
