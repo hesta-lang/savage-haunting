@@ -1222,7 +1222,8 @@ report = {
     "lower_limb_bone_properties_and_centering": lower_limb_audit,
     "lower_limb_mirror_symmetry": lower_limb_symmetry,
     "renders": ["Femgram-bones-front.png", "Femgram-bones-side.png", "Femgram-neutral.png", "Femgram-leg-pose-left-knee-only-front.png", "Femgram-leg-pose-left-knee-only-side.png", "Femgram-leg-pose-right-knee-only-front.png", "Femgram-leg-pose-right-knee-only-side.png"] + joint_isolation_render_names,
-    "distal_foot_weight_audit": distal_foot_weight_audit,\n    "foot_endpoint_audit": foot_endpoint_audit,
+    "distal_foot_weight_audit": distal_foot_weight_audit,
+    "foot_endpoint_audit": foot_endpoint_audit,
     "checks": {
         "distal_foot_weights_valid": all(v["passed"] for v in distal_foot_weight_audit.values()),
         "mesh_and_armature_present": bool(meshes and arms),
