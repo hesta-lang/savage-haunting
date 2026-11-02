@@ -93,6 +93,15 @@ jobs:
           test -s dist/validation/Femgram-leg-pose-left-knee-only-side.png
           test -s dist/validation/Femgram-leg-pose-right-knee-only-front.png
           test -s dist/validation/Femgram-leg-pose-right-knee-only-side.png
+          python - <<'PY'
+          import json
+          with open("dist/validation/Femgram-Rig-Validation.json", encoding="utf-8") as f:
+              report = json.load(f)
+          if report.get("passed_structural_checks") is not True:
+              raise SystemExit("Rig validation did not pass: " + json.dumps(report.get("checks", {}), sort_keys=True))
+          if report.get("vertices") != 75000 or report.get("geometry_diagnostics", {}).get("edges") != 225000:
+              raise SystemExit("Rig validation changed source geometry counts")
+          PY
 
       - name: Upload corrected rigged FBX
         uses: actions/upload-artifact@v4
