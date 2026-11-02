@@ -174,7 +174,8 @@ for edge in mesh.data.edges:
     a, b = edge.vertices
     adjacency[a].append(b)
     adjacency[b].append(a)
-group_by_name = {g.name: g for g in mesh.vertex_groups}\ngroup_index_to_name = {g.index: g.name for g in mesh.vertex_groups}
+group_by_name = {g.name: g for g in mesh.vertex_groups}
+group_index_to_name = {g.index: g.name for g in mesh.vertex_groups}
 for v in mesh.data.vertices:
     world = mesh.matrix_world @ v.co
     nx = (world.x - cx) / w
