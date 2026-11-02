@@ -47,10 +47,10 @@ for side_name, sign in (("L",1),("R",-1)):
     if len(toe_surface) < 20:
         raise RuntimeError("Insufficient "+side_name+" upper toe surface: "+str(len(toe_surface)))
     front_depths=sorted(q.y for q in toe_surface)
-    toe_cut=front_depths[max(0,int((len(front_depths)-1)*0.05))]
+    toe_cut=front_depths[max(0,int((len(front_depths)-1)*0.15))]
     toe_points=[q for q in toe_surface if q.y <= toe_cut]
     if len(toe_points) < 8:
-        toe_cut=front_depths[max(0,int((len(front_depths)-1)*0.10))]
+        toe_cut=front_depths[max(0,int((len(front_depths)-1)*0.20))]
         toe_points=[q for q in toe_surface if q.y <= toe_cut]
     if len(toe_points) < 8:
         raise RuntimeError("Insufficient "+side_name+" toe cross-section: "+str(len(toe_points)))
@@ -245,7 +245,7 @@ for v in mesh.data.vertices:
  if leg_mask > 0.001:
   # Stable anatomical partition: distance falloff must not overpower the
   # knee/ankle blend or pull the foot back onto the calf.
-  knee_blend=smoothstep(.235,.295,nz)
+  knee_blend=smoothstep(.18,.34,nz)
   foot_blend=1.0-smoothstep(.025,.145,nz)
   priors={
    side+"_Thigh": knee_blend,
@@ -344,10 +344,10 @@ for v in mesh.data.vertices:
 # Smooth only the normalized Thigh/Calf share over mesh-connected knee vertices;
 # preserve total lower-limb influence and never reintroduce Pelvis or Foot weight.
 knee_transition_smoothing = {
-    "left": [], "right": [], "iterations": 0, "factor": 0.0,
-    "normalized_height_band": [0.17, 0.35],
+    "left": [], "right": [], "iterations": 6, "factor": 0.18,
+    "normalized_height_band": [0.18, 0.34],
     "preserves_total_leg_weight": True,
-    "disabled_reason": "Avoids broad topology averaging that smears the hinge blend into the calf",
+    "disabled_reason": None,
     "pelvis_weight_added": False,
     "topology_preserved": True,
     "method": "bilateral mesh-adjacency smoothing of normalized thigh/calf shares"
@@ -360,7 +360,7 @@ for side_name, sign in (("L", 1), ("R", -1)):
         world = mesh.matrix_world @ vtx.co
         nx = (world.x - cx) / w
         nz = (world.z - lo[2]) / h
-        if nx * sign <= 0.025 or not (0.17 <= nz <= 0.35):
+        if nx * sign <= 0.025 or not (0.18 <= nz <= 0.34):
             continue
         weights = {group_index_to_name[g.group]: g.weight for g in vtx.groups}
         leg_total = weights.get(thigh_name, 0.0) + weights.get(calf_name, 0.0)
