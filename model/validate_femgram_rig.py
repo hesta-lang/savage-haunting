@@ -909,6 +909,62 @@ for side, side_test, prefix, calf_angle, foot_angle in (
         reset_pose()
 
 
+# Knee-specific surface strain: isolate Thigh and Calf rotations and measure
+# edge lengths/triangle areas in the anatomical knee ROI. Include per-endpoint
+# displacement and Thigh/Calf/Pelvis weights to test whether a stationary
+# Pelvis-weighted vertex is paired with a moving leg-weighted neighbor.
+knee_surface_strain_diagnostics = {}
+for side, side_test, prefix, thigh_angle, calf_angle in (
+    ("left", lambda v: nx(v) > 0.025, "L", 0.65, -0.65),
+    ("right", lambda v: nx(v) < -0.025, "R", -0.65, 0.65)
+):
+    knee_roi = [v.index for v in verts
+                if side_test(v) and 0.18 <= nz(v) < 0.33]
+    for joint, angle in (("thigh_only", thigh_angle), ("calf_only", calf_angle)):
+        reset_pose()
+        bone = arm.pose.bones.get("ValveBiped.Bip01_" + prefix + "_" +
+                                  ("Thigh" if joint == "thigh_only" else "Calf"))
+        if bone:
+            bone.rotation_mode = "XYZ"
+            bone.rotation_euler.x = angle
+        bpy.context.view_layer.update()
+        posed = sampled_positions(range(len(verts)))
+        report = surface_strain_report(rest_world, posed, knee_roi)
+        # Add movement and all relevant skinning weights to the worst edge endpoints.
+        for edge in report.get("worst_edges", []):
+            for detail in edge.get("vertex_details", []):
+                idx = detail["vertex"]
+                delta = posed[idx] - rest_world[idx]
+                detail["displacement_world"] = [round(float(x), 6) for x in delta]
+                detail["displacement_magnitude"] = round(float(delta.length), 8)
+                detail["weights"] = {
+                    name: round(float(vertex_weights[idx].get(name, 0.0)), 6)
+                    for name in (
+                        "ValveBiped.Bip01_" + prefix + "_Thigh",
+                        "ValveBiped.Bip01_" + prefix + "_Calf",
+                        "ValveBiped.Bip01_Pelvis"
+                    )
+                }
+        key = side + "_" + joint
+        knee_surface_strain_diagnostics[key] = {
+            "rotated_bone": "ValveBiped.Bip01_" + prefix + "_" +
+                            ("Thigh" if joint == "thigh_only" else "Calf"),
+            "rotation_radians": angle,
+            "surface_strain": report,
+            "pelvis_weighted_vertices_in_roi": sum(
+                vertex_weights[i].get("ValveBiped.Bip01_Pelvis", 0.0) > 0.05
+                for i in knee_roi
+            ),
+            "leg_weighted_vertices_in_roi": sum(
+                (vertex_weights[i].get("ValveBiped.Bip01_" + prefix + "_Thigh", 0.0) +
+                 vertex_weights[i].get("ValveBiped.Bip01_" + prefix + "_Calf", 0.0)) > 0.05
+                for i in knee_roi
+            )
+        }
+        render("Femgram-knee-strain-" + side + "-" + joint, "front")
+        reset_pose()
+
+
 # Bone-placement audit: export the actual rest-pose endpoints and render a visible
 # skeleton overlay. This is separate from skinning/pose tests.
 bone_audit = {}
@@ -1102,6 +1158,7 @@ report = {
     "foot_geometry_measurements": foot_geometry_measurements,
     "joint_isolation_diagnostics": joint_isolation_diagnostics,
     "surface_strain_diagnostics": surface_strain_diagnostics,
+    "knee_surface_strain_diagnostics": knee_surface_strain_diagnostics,
     "three_way_knee_comparison": knee_comparison,
     "pose_tests": pose_tests,
     "isolated_leg_joint_tests": isolated_joint_tests,
