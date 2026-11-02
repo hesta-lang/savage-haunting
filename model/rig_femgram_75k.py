@@ -109,8 +109,11 @@ for v in mesh.data.vertices:
   t=max(0.0,min(1.0,(value-a)/(b-a)))
   return t*t*(3.0-2.0*t)
  side="L" if nx >= 0 else "R"
- lateral=smoothstep(.030,.055,ax)*(1.0-smoothstep(.155,.185,ax))
- vertical=1.0-smoothstep(.385,.445,nz)
+ # Widen the leg envelope: the previous narrow lateral gate left outer
+ # calf/foot vertices pelvis-weighted. Distance to the actual limb chain
+ # below prevents this wider envelope from capturing nearby clothing.
+ lateral=smoothstep(.018,.045,ax)*(1.0-smoothstep(.205,.245,ax))
+ vertical=1.0-smoothstep(.395,.465,nz)
 
  # Treat the knee as a real joint zone, not as an incidental height blend.
  # Within this band, exposed leg vertices are fully assigned to the thigh /
@@ -119,15 +122,16 @@ for v in mesh.data.vertices:
  knee_zone=smoothstep(.185,.215,nz)*(1.0-smoothstep(.315,.345,nz))
  knee_lateral=smoothstep(.025,.050,ax)*(1.0-smoothstep(.155,.180,ax))
  knee_core=max(0.0,min(1.0,knee_zone*knee_lateral))
- leg_mask=max(0.0,min(1.0,max(lateral*vertical,knee_core)))
-
+ # Include the full exposed leg surface, using distance to the actual
+ # side-specific thigh/calf/foot chain rather than a narrow X-coordinate band.
+ leg_bones=[side+"_Thigh",side+"_Calf",side+"_Foot"]
+ leg_distance=min(distseg(xw,*segmap[n]) for n in leg_bones)
+ proximity=1.0-smoothstep(.115,.205,leg_distance)
+ leg_mask=max(0.0,min(1.0,max(lateral*vertical,knee_core,proximity*vertical)))
+ 
  if leg_mask > 0.001:
-  # The knee pivot is at normalized height .265. Blend only in a narrow
-  # anatomical band around that pivot; above it the thigh owns the vertices,
-  # below it the calf owns them. At the joint itself both receive 50%.
-  # Base anatomical partition: blend smoothly across the knee and ankle.
-  # These priors establish which joint owns each height band; distance to the
-  # actual bone segment then corrects the distribution for the mesh surface.
+  # Stable anatomical partition: distance falloff must not overpower the
+  # knee/ankle blend or pull the foot back onto the calf.
   knee_blend=smoothstep(.215,.315,nz)
   foot_blend=1.0-smoothstep(.045,.090,nz)
   priors={
@@ -135,23 +139,10 @@ for v in mesh.data.vertices:
    side+"_Calf": (1.0-knee_blend)*(1.0-foot_blend),
    side+"_Foot": (1.0-knee_blend)*foot_blend
   }
-  # Proximity correction prevents vertices on the rear/side of the ankle and
-  # foot from inheriting weights merely because they share the same Z height.
-  # Adjacent bones naturally share influence near the knee and ankle pivots.
-  leg_gates={}
-  for bone_name, prior in priors.items():
-   if prior <= 1e-10:
-    continue
-   distance=distseg(xw,*segmap[bone_name])
-   leg_gates[bone_name]=prior/((distance+0.025)**2.0)
-  leg_total=sum(leg_gates.values())
-  if leg_total <= 1e-12:
-   leg_gates={side+"_Thigh":knee_blend,
-              side+"_Calf":(1.0-knee_blend)*(1.0-foot_blend),
-              side+"_Foot":(1.0-knee_blend)*foot_blend}
-   leg_total=sum(leg_gates.values())
-  for n,weight in leg_gates.items():
-   groups[n].add([v.index],leg_mask*weight/leg_total,"REPLACE")
+  leg_total=sum(priors.values())
+  for n,weight in priors.items():
+   if weight > 1e-10:
+    groups[n].add([v.index],leg_mask*weight/leg_total,"REPLACE")
   # Pelvis influence is allowed only outside the exposed leg mask. In the
   # knee core leg_mask is 1, so every knee vertex is attached to the leg chain.
   pelvis_weight=1.0-leg_mask
