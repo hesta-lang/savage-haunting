@@ -457,6 +457,94 @@ for side_name in ("L", "R"):
         isolated_joint_tests[full_name] = apply_joint(full_name, test_angle)
         reset_pose()
 
+# Per-vertex knee audit: distinguish group membership from actual deformation
+# and mesh-topology connectivity. Each knee vertex is tested against isolated
+# thigh and calf rotations, then linked edges/neighbors and component membership
+# are recorded from the imported FBX.
+knee_vertex_audit = {}
+component_sizes = defaultdict(int)
+for root in parent:
+    component_sizes[find_root(root)] += 1
+all_indices = list(range(len(verts)))
+for side_name, side_test, prefix in (
+    ("left", lambda v: nx(v) > 0.025, "L"),
+    ("right", lambda v: nx(v) < -0.025, "R")
+):
+    knee_indices = [v.index for v in verts if side_test(v) and 0.20 <= nz(v) < 0.29]
+    side_report = {
+        "vertex_count": len(knee_indices),
+        "joint_tests": {},
+        "vertices": []
+    }
+    # Store exact membership and topology for every vertex in this spatial knee band.
+    vertex_records = {}
+    for idx in knee_indices:
+        v = verts[idx]
+        weights = vertex_weights[idx]
+        root = find_root(idx)
+        linked = [e for e in bm.edges if any(ev.index == idx for ev in e.verts)] if False else []
+        # Build neighbors from mesh edges without relying on surface normals.
+        vertex_records[idx] = {
+            "index": idx,
+            "position_world": [round(float(x), 6) for x in (mesh.matrix_world @ v.co)],
+            "weight_sum": round(sum(weights.values()), 8),
+            "weights": {name: round(float(value), 8) for name, value in sorted(weights.items())},
+            "has_matching_thigh_group": "ValveBiped.Bip01_" + prefix + "_Thigh" in weights,
+            "has_matching_calf_group": "ValveBiped.Bip01_" + prefix + "_Calf" in weights,
+            "has_matching_foot_group": "ValveBiped.Bip01_" + prefix + "_Foot" in weights,
+            "connected_component_root": root,
+            "connected_component_size": component_sizes[root],
+            "neighbor_count": 0,
+            "neighbor_indices": []
+        }
+    adjacency = defaultdict(list)
+    for edge in mesh.data.edges:
+        a, b = edge.vertices
+        if a in vertex_records:
+            adjacency[a].append(b)
+        if b in vertex_records:
+            adjacency[b].append(a)
+    for idx, record in vertex_records.items():
+        record["neighbor_count"] = len(adjacency[idx])
+        record["neighbor_indices"] = adjacency[idx][:12]
+    # Test each individual knee vertex against an isolated rotation of its own
+    # thigh and calf; displacement is measured after Armature evaluation.
+    reset_pose()
+    base = sampled_positions(all_indices)
+    for part, angle in (("Thigh", 0.35), ("Calf", -0.50)):
+        full_name = "ValveBiped.Bip01_" + prefix + "_" + part
+        (best_rms, axis), _, axis_metrics = choose_axis(full_name, angle)
+        reset_pose()
+        pb = arm.pose.bones.get(full_name)
+        if pb is None or axis < 0:
+            moved = [0.0] * len(verts)
+            chosen_axis = None
+        else:
+            pb.rotation_euler[axis] = angle
+            bpy.context.view_layer.update()
+            posed = sampled_positions(all_indices)
+            moved = [(posed[i] - base[i]).length for i in range(min(len(base), len(posed)))]
+            chosen_axis = "XYZ"[axis]
+        immobile = []
+        moved_count = 0
+        for idx in knee_indices:
+            displacement = moved[idx] if idx < len(moved) else 0.0
+            vertex_records[idx][part.lower() + "_displacement"] = round(float(displacement), 8)
+            if displacement > 0.0001:
+                moved_count += 1
+            else:
+                immobile.append(idx)
+        side_report["joint_tests"][part] = {
+            "chosen_local_axis": chosen_axis,
+            "axis_rms_displacement": axis_metrics,
+            "vertices_moved_over_0_0001": moved_count,
+            "vertices_immobile": len(immobile),
+            "immobile_vertex_indices": immobile[:500]
+        }
+        reset_pose()
+    side_report["vertices"] = list(vertex_records.values())
+    knee_vertex_audit[side_name] = side_report
+
 # Neutral
 reset_pose()
 render("Femgram-neutral", "front")
@@ -592,7 +680,7 @@ report = {
     "unweighted_vertices": len(verts)-weighted, "bones": len(bone_names),
     "missing_expected_bones": missing, "armature_modifier_linked": bool(arm_mods),
     "vertex_groups": len(mesh.vertex_groups),
-    "geometry_diagnostics": geometry_diagnostics,
+    "geometry_diagnostics": geometry_diagnostics,\n    "knee_vertex_audit": knee_vertex_audit,
     "foot_geometry_measurements": foot_geometry_measurements,
     "pose_tests": pose_tests,
     "isolated_leg_joint_tests": isolated_joint_tests,
