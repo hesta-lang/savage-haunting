@@ -457,6 +457,40 @@ for v in mesh.data.vertices:
         "neighbor_count": len(neighbor_samples),
         "inherited_weights": avg
     })
+# Lock the anatomical sole/toe cap to the Foot bone.
+# The previous neighbor repair skipped vertices that already had >=85% Foot,
+# even when the remaining 5-8% Pelvis influence was enough to stretch long
+# edges during calf/foot rotation. The distal foot cap is a rigid foot region:
+# make its influence exactly 100% Foot on both sides, without touching knees.
+foot_cap_weight_lock = {"left": [], "right": [], "normalized_height_max": 0.035,
+                        "foot_weight_after": 1.0, "pelvis_weight_after": 0.0}
+for v in mesh.data.vertices:
+    world = mesh.matrix_world @ v.co
+    nx = (world.x - cx) / w
+    nz = (world.z - lo[2]) / h
+    if not (nz < foot_cap_weight_lock["normalized_height_max"] and
+            0.025 < abs(nx) < 0.20):
+        continue
+    side = "L" if nx > 0 else "R"
+    thigh_name = "ValveBiped.Bip01_" + side + "_Thigh"
+    calf_name = "ValveBiped.Bip01_" + side + "_Calf"
+    foot_name = "ValveBiped.Bip01_" + side + "_Foot"
+    pelvis_name = "ValveBiped.Bip01_Pelvis"
+    own = {group_index_to_name[g.group]: g.weight for g in v.groups}
+    previous = {name: round(float(own.get(name, 0.0)), 6)
+                for name in (thigh_name, calf_name, foot_name, pelvis_name)}
+    mesh.vertex_groups[foot_name].add([v.index], 1.0, "REPLACE")
+    for group_name in (thigh_name, calf_name, pelvis_name):
+        group = group_by_name.get(group_name)
+        if group:
+            try:
+                group.remove([v.index])
+            except RuntimeError:
+                pass
+    foot_cap_weight_lock["left" if side == "L" else "right"].append({
+        "vertex": v.index, "previous_weights": previous
+    })
+
 # Quantitative ankle/foot weight diagnostics (read-only; no vertex or weight edits).
 # Report both the complete ankle transition and narrower sub-bands so residual
 # pelvis influence and abrupt calf/foot handoffs can be located per side.
