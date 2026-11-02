@@ -11,6 +11,11 @@ permissions:
   actions: read
   contents: read
 
+# Avoid wasting runner time on superseded comparison builds.
+concurrency:
+  group: femgram-topology-comparison-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   compare:
     runs-on: ubuntu-24.04
@@ -68,9 +73,13 @@ jobs:
           done
           if [ "$missing" -eq 1 ]; then
             sudo apt-get update
-            sudo apt-get install -y libegl1 libgl1 libgles2 libgbm1 libx11-6 libxi6 libxrender1 libxxf86vm1 libxfixes3 libxkbcommon0
+            sudo apt-get install -y libegl1 libgl1 libgles2 libgbm1 libx11-6 libxi6 libxrender1 libxxf86vm1 libxfixes3 libxkbcommon0 python3-pil
           else
             echo "All Blender runtime libraries are already available."
+            if ! /usr/bin/python3 -c "from PIL import Image" 2>/dev/null; then
+              sudo apt-get update
+              sudo apt-get install -y python3-pil
+            fi
           fi
 
       - name: Download Blender runtime
