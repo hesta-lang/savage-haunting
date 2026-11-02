@@ -137,7 +137,7 @@ def render_knee(side, angle):
         point = mesh.matrix_world @ vertex.co
         nx = (point.x - center_x) / width
         nz = (point.z - min_z) / height
-        if nx * side_sign > 0.025 and 0.18 <= nz < 0.33:
+        if nx * side_sign > 0.025 and 0.12 <= nz < 0.40:
             knee_roi.add(vertex.index)
     edge_changes = []
     for edge in mesh.data.edges:
