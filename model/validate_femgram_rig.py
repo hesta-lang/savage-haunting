@@ -382,6 +382,7 @@ def choose_axis(bone_name, angle):
     saved = {pb.name: pb.rotation_euler.copy() for pb in arm.pose.bones}
     base_positions = sampled_positions(indices)
     best = (0.0, 0)
+    axis_measurements = {}
     for axis in range(3):
         reset_pose()
         for name, rotation in saved.items():
@@ -396,6 +397,7 @@ def choose_axis(bone_name, angle):
         count = min(len(base_positions), len(after))
         if count:
             rms = math.sqrt(sum((after[i] - base_positions[i]).length_squared for i in range(count)) / count)
+            axis_measurements["XYZ"[axis]] = round(rms, 8)
             if rms > best[0]:
                 best = (rms, axis)
     reset_pose()
@@ -403,7 +405,7 @@ def choose_axis(bone_name, angle):
         if name in arm.pose.bones:
             arm.pose.bones[name].rotation_euler = rotation
     bpy.context.view_layer.update()
-    return best, len(indices)
+    return best, len(indices), axis_measurements
 
 reset_pose()
 neutral_positions = sampled_positions()
@@ -412,10 +414,11 @@ def apply_joint(bone_name, angle):
     if bone_name not in arm.pose.bones:
         pose_tests[bone_name] = {"found": False, "rms_displacement": 0.0}
         return
-    (rms, axis), sample_count = choose_axis(bone_name, angle)
+    (rms, axis), sample_count, axis_measurements = choose_axis(bone_name, angle)
     arm.pose.bones[bone_name].rotation_euler[axis] = angle
     pose_tests[bone_name] = {"found": True, "chosen_local_axis": ["X", "Y", "Z"][axis],
                              "rms_displacement": round(rms, 6),
+                             "axis_rms_displacement": axis_measurements,
                              "influenced_sample_vertices": sample_count}
 
 # Neutral
