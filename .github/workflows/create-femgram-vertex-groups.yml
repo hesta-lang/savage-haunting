@@ -2,6 +2,13 @@ name: Femgram - Generate and visualize vertex groups
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - beta/gmod-addon
+    paths:
+      - 'model/rig_femgram_75k.py'
+      - 'model/create_femgram_vertex_groups.py'
+      - '.github/workflows/create-femgram-vertex-groups.yml'
 
 permissions:
   actions: read
