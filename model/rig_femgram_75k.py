@@ -305,8 +305,8 @@ for v in mesh.data.vertices:
 # Smooth only the normalized Thigh/Calf share over mesh-connected knee vertices;
 # preserve total lower-limb influence and never reintroduce Pelvis or Foot weight.
 knee_transition_smoothing = {
-    "left": [], "right": [], "iterations": 12, "factor": 0.45,
-    "normalized_height_band": [0.15, 0.38],
+    "left": [], "right": [], "iterations": 8, "factor": 0.35,
+    "normalized_height_band": [0.20, 0.31],
     "preserves_total_leg_weight": True,
     "pelvis_weight_added": False
 }
