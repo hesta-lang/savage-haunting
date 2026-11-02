@@ -99,7 +99,9 @@ jobs:
               report = json.load(f)
           if report.get("passed_structural_checks") is not True:
               raise SystemExit("Rig validation did not pass: " + json.dumps(report.get("checks", {}), sort_keys=True))
-          if report.get("vertices") != 75000 or report.get("geometry_diagnostics", {}).get("edges") != 225000:
+          if (report.get("vertices") != 75000 or
+              report.get("geometry_diagnostics", {}).get("edges") != 225000 or
+              report.get("geometry_diagnostics", {}).get("faces") != 150000):
               raise SystemExit("Rig validation changed source geometry counts")
           PY
 
