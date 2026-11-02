@@ -591,6 +591,9 @@ for side_name, sign in (("L", 1), ("R", -1)):
 
 mod=mesh.modifiers.new("Femgram Armature","ARMATURE")
 mod.object=arm
+# Dual-quaternion skinning preserves limb volume during large knee bends.
+# This is evaluated in Blender and exported as the armature modifier setting.
+mod.use_deform_preserve_volume=True
 # Preserve the mesh world transform when parenting it to the armature.
 mesh.parent=arm
 mesh.matrix_parent_inverse=arm.matrix_world.inverted_safe()
