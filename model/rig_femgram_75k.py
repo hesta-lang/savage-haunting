@@ -12,8 +12,26 @@ w,d,h=[hi[i]-lo[i] for i in range(3)]
 if h<max(w,d): raise RuntimeError("Expected Z-up model; bounds="+str((w,d,h)))
 cx=(lo[0]+hi[0])/2; cy=(lo[1]+hi[1])/2
 def p(x,z,y=0): return world_to_arm @ Vector((cx+x*w,cy+y*d,lo[2]+z*h))
+# Measure anatomical knee and ankle centers from the actual mesh cross-sections.
+# Use component-wise medians to reject stray vertices and keep each side's
+# pivot centered on its own surface rather than assuming a perfectly symmetric
+# X/Y position. The same normalized bands are independently audited later.
+joint_targets={}
+for side_name, sign in (("L",1),("R",-1)):
+    joint_targets[side_name]={}
+    for joint_name, z_target in (("knee",0.265),("ankle",0.075)):
+        samples=[q for q in vs
+                 if ((q.x-cx)/w)*sign > 0.025
+                 and abs((q.z-lo[2])/h-z_target) <= 0.006]
+        if len(samples) < 20:
+            raise RuntimeError("Insufficient "+side_name+" "+joint_name+" cross-section: "+str(len(samples)))
+        joint_targets[side_name][joint_name]=Vector((
+            sorted(q.x for q in samples)[len(samples)//2],
+            sorted(q.y for q in samples)[len(samples)//2],
+            sorted(q.z for q in samples)[len(samples)//2]
+        ))
 # Measure each actual foot region before creating bones. The foot tail is placed
-# at the mesh toe extremity rather than using an arbitrary whole-body depth.
+# at a robust toe-edge centroid rather than an arbitrary whole-body depth.
 foot_targets={}
 for side_name, sign in (("L",1),("R",-1)):
     foot_points=[q for q in vs
@@ -21,11 +39,6 @@ for side_name, sign in (("L",1),("R",-1)):
                  and (q.z-lo[2])/h < 0.075]
     if not foot_points:
         raise RuntimeError("Could not locate "+side_name+" foot geometry")
-    # Use the foot-region centroid for the bone axis instead of the single
-    # most-forward vertex. The latter can be a stray toe/mesh spike and made
-    # the foot bone as long as the entire calf in the previous build.
-    # Find the toe from a robust front-edge percentile, not the centroid
-    # of the whole foot. A few stray vertices must not stretch the bone.
     front_depths=sorted(q.y for q in foot_points)
     toe_cut=front_depths[max(0,int((len(front_depths)-1)*0.08))]
     toe_points=[q for q in foot_points if q.y <= toe_cut]
@@ -35,6 +48,8 @@ for side_name, sign in (("L",1),("R",-1)):
         "toe_y": (sum(q.y for q in toe_points)/len(toe_points)-cy)/d,
         "toe_sample_vertices": len(toe_points)
     }
+def normalized_joint_point(point):
+    return p((point.x-cx)/w,(point.z-lo[2])/h,(point.y-cy)/d)
 # Match the armature object transform to the imported mesh. Bone positions are
 # authored in mesh world coordinates and converted to armature-local coordinates.
 mesh_world=mesh.matrix_world.copy()
@@ -52,12 +67,15 @@ add("Spine",p(0,.54),p(0,.62),"Pelvis"); add("Spine1",p(0,.62),p(0,.69),"Spine")
 add("Spine2",p(0,.69),p(0,.75),"Spine1"); add("Neck",p(0,.75),p(0,.82),"Spine2"); add("Head",p(0,.82),p(0,.94),"Neck")
 for s,sgn in (("L",1),("R",-1)):
  thigh=s+"_Thigh"; calf=s+"_Calf"; foot=s+"_Foot"
- add(thigh,p(sgn*.105,.49),p(sgn*.105,.265),"Pelvis")
- add(calf,p(sgn*.105,.265),p(sgn*.105,.075),thigh,True)
- # The ankle is exactly the calf endpoint. The short foot bone follows the
- # measured ankle-to-toe direction and ends at the actual toe extremity.
+ knee_point=normalized_joint_point(joint_targets[s]["knee"])
+ ankle_point=normalized_joint_point(joint_targets[s]["ankle"])
+ add(thigh,p(sgn*.105,.49),knee_point,"Pelvis")
+ add(calf,knee_point,ankle_point,thigh,True)
+ # Calf tail and Foot head share the measured ankle center exactly. The foot
+ # axis then follows the measured ankle-to-toe direction, preventing the
+ # previous ~10 cm pivot offset from shearing the ankle during foot rotation.
  target=foot_targets[s]
- add(foot,p(sgn*.105,.075),p(target["x"],target["z"],target["toe_y"]),calf,True)
+ add(foot,ankle_point,p(target["x"],target["z"],target["toe_y"]),calf,True)
  clav=s+"_Clavicle"; upper=s+"_UpperArm"; fore=s+"_Forearm"; hand=s+"_Hand"
  add(clav,p(sgn*.035,.70),p(sgn*.145,.70),"Spine2")
  add(upper,p(sgn*.145,.70),p(sgn*.315,.695),clav,True)
