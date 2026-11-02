@@ -20,7 +20,7 @@ jobs:
       - name: Checkout beta branch
         uses: actions/checkout@v4
         with:
-          ref: beta/gmod-addon
+          ref: ${{ github.sha }}
 
       - name: Download approved 75K source FBX
         uses: actions/download-artifact@v4
