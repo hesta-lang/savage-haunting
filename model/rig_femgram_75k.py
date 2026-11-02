@@ -24,10 +24,16 @@ for side_name, sign in (("L",1),("R",-1)):
     # Use the foot-region centroid for the bone axis instead of the single
     # most-forward vertex. The latter can be a stray toe/mesh spike and made
     # the foot bone as long as the entire calf in the previous build.
+    # Find the toe from a robust front-edge percentile, not the centroid
+    # of the whole foot. A few stray vertices must not stretch the bone.
+    front_depths=sorted(q.y for q in foot_points)
+    toe_cut=front_depths[max(0,int((len(front_depths)-1)*0.08))]
+    toe_points=[q for q in foot_points if q.y <= toe_cut]
     foot_targets[side_name]={
-        "x": (sum(q.x for q in foot_points)/len(foot_points)-cx)/w,
-        "z": (sum(q.z for q in foot_points)/len(foot_points)-lo[2])/h,
-        "toe_y": (sum(q.y for q in foot_points)/len(foot_points)-cy)/d
+        "x": (sum(q.x for q in toe_points)/len(toe_points)-cx)/w,
+        "z": (sum(q.z for q in toe_points)/len(toe_points)-lo[2])/h,
+        "toe_y": (sum(q.y for q in toe_points)/len(toe_points)-cy)/d,
+        "toe_sample_vertices": len(toe_points)
     }
 # Match the armature object transform to the imported mesh. Bone positions are
 # authored in mesh world coordinates and converted to armature-local coordinates.
