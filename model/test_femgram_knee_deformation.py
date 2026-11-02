@@ -113,6 +113,41 @@ def render_knee(side, angle):
     ordered = sorted(displacements)
     p95 = ordered[min(len(ordered)-1, int(len(ordered)*0.95))]
     moved = sum(d > 1e-5 for d in displacements)
+
+    # Measure actual local surface strain around this knee. Vertex movement
+    # alone is not evidence of a healthy bend: adjacent vertices must retain
+    # approximately consistent edge lengths.
+    world_neutral = [mesh.matrix_world @ v.co for v in mesh.data.vertices]
+    min_z = min(p.z for p in world_neutral)
+    max_z = max(p.z for p in world_neutral)
+    min_x = min(p.x for p in world_neutral)
+    max_x = max(p.x for p in world_neutral)
+    width = max(max_x - min_x, 1e-8)
+    height = max(max_z - min_z, 1e-8)
+    center_x = (min_x + max_x) * 0.5
+    side_sign = 1 if side == "L" else -1
+    knee_roi = set()
+    for vertex in mesh.data.vertices:
+        point = mesh.matrix_world @ vertex.co
+        nx = (point.x - center_x) / width
+        nz = (point.z - min_z) / height
+        if nx * side_sign > 0.025 and 0.18 <= nz < 0.33:
+            knee_roi.add(vertex.index)
+    edge_changes = []
+    for edge in mesh.data.edges:
+        a, b = edge.vertices
+        if a not in knee_roi and b not in knee_roi:
+            continue
+        rest_length = (world_neutral[a] - world_neutral[b]).length
+        posed_length = (posed[a] - posed[b]).length
+        if rest_length > 1e-9:
+            edge_changes.append(abs(posed_length / rest_length - 1.0))
+    edge_changes.sort()
+    edge_p95 = edge_changes[min(len(edge_changes)-1, int((len(edge_changes)-1)*0.95))] if edge_changes else 1.0
+    edge_max = max(edge_changes) if edge_changes else 1.0
+    edges_over_5 = sum(value > 0.05 for value in edge_changes)
+    edges_over_10 = sum(value > 0.10 for value in edge_changes)
+    strain_passed = bool(edge_changes) and edge_p95 <= 0.05 and edge_max <= 0.25 and edges_over_10 <= 25
     result = {
         "side": "left" if side == "L" else "right",
         "angle_degrees": angle,
@@ -123,11 +158,19 @@ def render_knee(side, angle):
         "vertices_moved": moved,
         "max_displacement": round(max(displacements), 6),
         "p95_displacement": round(p95, 6),
+        "knee_surface_strain": {
+            "tested_edges": len(edge_changes),
+            "p95_relative_edge_change": round(edge_p95, 6),
+            "max_relative_edge_change": round(edge_max, 6),
+            "edges_over_5_percent": edges_over_5,
+            "edges_over_10_percent": edges_over_10,
+            "passed": strain_passed
+        },
         "render": os.path.basename(path)
     }
     bpy.data.objects.remove(cam, do_unlink=True) if bpy.data.objects.get("KneeTestCamera") else None
-    if not finite or moved == 0:
-        raise RuntimeError("Knee test failed: invalid coordinates or no mesh deformation: " + str(result))
+    if not finite or moved == 0 or not strain_passed:
+        raise RuntimeError("Knee deformation quality test failed: " + str(result))
     return result
 
 results = []
@@ -141,6 +184,13 @@ report = {
     "test_angles_degrees": [45, 90],
     "rotation_axis": "local X",
     "rotation_sign": {"left": "negative", "right": "positive"},
+    "quality_gate": {
+        "knee_edge_strain_p95_max": 0.05,
+        "knee_edge_strain_max_max": 0.25,
+        "edges_over_10_percent_max": 25,
+        "requires_finite_coordinates": True,
+        "requires_mesh_deformation": True
+    },
     "results": results,
     "limitations": [
         "This is a Blender armature deformation test, not a Source-engine runtime test.",
