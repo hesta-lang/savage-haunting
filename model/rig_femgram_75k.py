@@ -624,9 +624,92 @@ for v in mesh.data.vertices:
  mesh.vertex_groups[foot_name].add([v.index], 1.0, "REPLACE")
  final_distal_foot_lock["left" if side == "L" else "right"] += 1
 
+# Final knee cleanup after all interpolation/repair passes. The earlier smoother
+# excluded vertices with even a small Pelvis remainder; those isolated vertices
+# created severe edge stretch on the medial right knee. Only vertices already
+# strongly assigned to the matching leg chain are eligible, so skirt/body
+# vertices remain untouched. Remove residual Pelvis/Foot and smooth the
+# normalized Thigh/Calf share over the actual connected knee surface.
+final_knee_weight_cleanup = {"left": 0, "right": 0, "iterations": 24, "factor": 0.45,
+                             "normalized_height_band": [0.17, 0.35],
+                             "minimum_existing_leg_weight": 0.80}
+for side_name, sign in (("L", 1), ("R", -1)):
+    thigh_name = "ValveBiped.Bip01_" + side_name + "_Thigh"
+    calf_name = "ValveBiped.Bip01_" + side_name + "_Calf"
+    foot_name = "ValveBiped.Bip01_" + side_name + "_Foot"
+    pelvis_name = "ValveBiped.Bip01_Pelvis"
+    eligible = set()
+    for vtx in mesh.data.vertices:
+        world = mesh.matrix_world @ vtx.co
+        nx = (world.x-cx)/w
+        nz = (world.z-lo[2])/h
+        if nx*sign <= 0.025 or not (0.17 <= nz <= 0.35):
+            continue
+        own = {group_index_to_name[g.group]: g.weight for g in vtx.groups}
+        thigh_w = own.get(thigh_name, 0.0)
+        calf_w = own.get(calf_name, 0.0)
+        leg_w = thigh_w + calf_w
+        if leg_w < final_knee_weight_cleanup["minimum_existing_leg_weight"]:
+            continue
+        # Preserve the vertex's existing anatomical Thigh/Calf ratio while
+        # removing only contaminating influences from the other body regions.
+        total = max(1e-8, leg_w)
+        mesh.vertex_groups[thigh_name].add([vtx.index], thigh_w/total, "REPLACE")
+        mesh.vertex_groups[calf_name].add([vtx.index], calf_w/total, "REPLACE")
+        for other_name in (foot_name, pelvis_name):
+            other = group_by_name.get(other_name)
+            if other:
+                try: other.remove([vtx.index])
+                except RuntimeError: pass
+        eligible.add(vtx.index)
+    # Iterative bilateral graph smoothing; updates are applied per iteration
+    # to keep the field stable on irregular topology.
+    for _ in range(final_knee_weight_cleanup["iterations"]):
+        updates = {}
+        for idx in eligible:
+            vtx = mesh.data.vertices[idx]
+            own = {group_index_to_name[g.group]: g.weight for g in vtx.groups}
+            own_total = own.get(thigh_name, 0.0) + own.get(calf_name, 0.0)
+            if own_total <= 1e-8: continue
+            shares = []
+            for ni in adjacency[idx]:
+                if ni not in eligible: continue
+                nw = {group_index_to_name[g.group]: g.weight
+                      for g in mesh.data.vertices[ni].groups}
+                nt = nw.get(thigh_name, 0.0) + nw.get(calf_name, 0.0)
+                if nt > 1e-8: shares.append(nw.get(thigh_name, 0.0)/nt)
+            if not shares: continue
+            average = sum(shares)/len(shares)
+            current = own.get(thigh_name, 0.0)/own_total
+            share = max(0.0, min(1.0,
+                current*(1.0-final_knee_weight_cleanup["factor"]) +
+                average*final_knee_weight_cleanup["factor"]))
+            updates[idx] = (share, 1.0-share)
+        for idx, (thigh_w, calf_w) in updates.items():
+            mesh.vertex_groups[thigh_name].add([idx], thigh_w, "REPLACE")
+            mesh.vertex_groups[calf_name].add([idx], calf_w, "REPLACE")
+    final_knee_weight_cleanup["left" if side_name == "L" else "right"] = len(eligible)
+
+# Verify the authored Foot bone endpoints before FBX export. This catches an
+# armature-space/world-space regression before the artifact is published.
+foot_bone_endpoint_audit = {}
+for side_name in ("L", "R"):
+    bone = ad.bones.get("ValveBiped.Bip01_" + side_name + "_Foot")
+    target = Vector(foot_targets[side_name]["toe_world"])
+    actual = arm.matrix_world @ bone.tail_local
+    delta = actual-target
+    foot_bone_endpoint_audit[side_name] = {
+        "target_world": [float(x) for x in target],
+        "actual_tail_world": [float(x) for x in actual],
+        "offset_distance": float(delta.length)
+    }
+    if delta.length > 0.005:
+        raise RuntimeError("Foot bone endpoint is not at measured toe surface: " +
+                           side_name + " offset=" + str(delta.length))
+
 bpy.ops.object.select_all(action="DESELECT"); mesh.select_set(True); arm.select_set(True); bpy.context.view_layer.objects.active=arm
 dest=os.path.join(out,"Femgram-75K-ValveBiped-Rigged.fbx")
 bpy.ops.export_scene.fbx(filepath=dest,use_selection=True,object_types={"ARMATURE","MESH"},add_leaf_bones=False,bake_anim=False,path_mode="COPY",embed_textures=True,axis_forward="-Z",axis_up="Y")
-report={"vertices":len(mesh.data.vertices),"polygons":len(mesh.data.polygons),"bones":len(ad.bones),"vertex_groups":len(mesh.vertex_groups),"weighted_vertices":sum(bool(v.groups) for v in mesh.data.vertices),"knee_weight_repair":knee_weight_repair,"knee_transition_smoothing":knee_transition_smoothing,"foot_weight_repair":foot_weight_repair,"foot_cap_weight_lock":foot_cap_weight_lock,"final_distal_foot_lock":final_distal_foot_lock,"foot_targets":foot_targets,"ankle_transition_smoothing":ankle_transition_smoothing,"ankle_weight_diagnostics":ankle_weight_diagnostics,"unweighted_vertices":sum(not v.groups for v in mesh.data.vertices),"automatic_weights":auto,"automatic_weights_error":err,"materials":[m.name if m else None for m in mesh.data.materials],"uv_layers":[u.name for u in mesh.data.uv_layers],"dimensions":[w,d,h],"warning":"Provisional proportion-based rig; validate deformation and Source-engine compatibility before release."}
+report={"vertices":len(mesh.data.vertices),"polygons":len(mesh.data.polygons),"bones":len(ad.bones),"vertex_groups":len(mesh.vertex_groups),"weighted_vertices":sum(bool(v.groups) for v in mesh.data.vertices),"knee_weight_repair":knee_weight_repair,"knee_transition_smoothing":knee_transition_smoothing,"foot_weight_repair":foot_weight_repair,"foot_cap_weight_lock":foot_cap_weight_lock,"final_distal_foot_lock":final_distal_foot_lock,"final_knee_weight_cleanup":final_knee_weight_cleanup,"foot_bone_endpoint_audit":foot_bone_endpoint_audit,"foot_targets":foot_targets,"ankle_transition_smoothing":ankle_transition_smoothing,"ankle_weight_diagnostics":ankle_weight_diagnostics,"unweighted_vertices":sum(not v.groups for v in mesh.data.vertices),"automatic_weights":auto,"automatic_weights_error":err,"materials":[m.name if m else None for m in mesh.data.materials],"uv_layers":[u.name for u in mesh.data.uv_layers],"dimensions":[w,d,h],"warning":"Provisional proportion-based rig; validate deformation and Source-engine compatibility before release."}
 with open(os.path.join(out,"Femgram-75K-Rig-Report.json"),"w") as f: json.dump(report,f,indent=2)
 print(json.dumps(report,indent=2))
