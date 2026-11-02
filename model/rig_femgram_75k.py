@@ -455,6 +455,65 @@ for v in mesh.data.vertices:
         "neighbor_count": len(neighbor_samples),
         "inherited_weights": avg
     })
+# Quantitative ankle/foot weight diagnostics (read-only; no vertex or weight edits).
+# Report both the complete ankle transition and narrower sub-bands so residual
+# pelvis influence and abrupt calf/foot handoffs can be located per side.
+ankle_weight_diagnostics = {"bands": {}, "thresholds": {"meaningful_weight": 0.01, "pelvis_warning": 0.01}}
+diagnostic_bands = {
+    "ankle_transition": (0.045, 0.135),
+    "lower_ankle": (0.045, 0.075),
+    "ankle_joint": (0.075, 0.105),
+    "upper_ankle": (0.105, 0.135),
+    "foot_top": (0.035, 0.075),
+    "lower_leg_context": (0.135, 0.17)
+}
+for side_name, sign in (("L", 1), ("R", -1)):
+    names = {
+        "thigh": "ValveBiped.Bip01_" + side_name + "_Thigh",
+        "calf": "ValveBiped.Bip01_" + side_name + "_Calf",
+        "foot": "ValveBiped.Bip01_" + side_name + "_Foot",
+        "pelvis": "ValveBiped.Bip01_Pelvis"
+    }
+    side_report = {}
+    for band_name, (z_min, z_max) in diagnostic_bands.items():
+        samples = []
+        for vertex in mesh.data.vertices:
+            world = mesh.matrix_world @ vertex.co
+            nx = (world.x - cx) / w
+            nz = (world.z - lo[2]) / h
+            if nx * sign <= 0.025 or not (z_min <= nz < z_max):
+                continue
+            weights = {group_index_to_name[g.group]: g.weight for g in vertex.groups}
+            samples.append((vertex.index, {
+                key: weights.get(group_name, 0.0)
+                for key, group_name in names.items()
+            }))
+        band_report = {"vertex_count": len(samples)}
+        for key in names:
+            values = sorted(sample[1][key] for sample in samples)
+            if not values:
+                band_report[key] = {"mean": 0.0, "min": 0.0, "max": 0.0,
+                                    "over_1pct": 0, "over_10pct": 0}
+                continue
+            band_report[key] = {
+                "mean": round(sum(values) / len(values), 6),
+                "min": round(values[0], 6),
+                "p50": round(values[len(values)//2], 6),
+                "p95": round(values[min(len(values)-1, int(len(values)*0.95))], 6),
+                "max": round(values[-1], 6),
+                "over_1pct": sum(value > 0.01 for value in values),
+                "over_10pct": sum(value > 0.10 for value in values)
+            }
+        band_report["pelvis_contamination_vertices"] = [
+            index for index, weights in samples if weights["pelvis"] > 0.01
+        ]
+        band_report["dominant_bone_counts"] = {
+            key: sum(max(sample[1], key=sample[1].get) == key for sample in samples)
+            for key in names
+        }
+        side_report[band_name] = band_report
+    ankle_weight_diagnostics["bands"]["left" if side_name == "L" else "right"] = side_report
+
 mod=mesh.modifiers.new("Femgram Armature","ARMATURE")
 mod.object=arm
 # Preserve the mesh world transform when parenting it to the armature.
