@@ -92,6 +92,14 @@ def render_knee(side, angle):
         raise RuntimeError("Pose did not change the calf bone matrix; check constraints/rotation axis: " + bone_name)
 
     arm_eval = arm.evaluated_get(depsgraph)
+    rest_x = (arm.matrix_world.to_3x3() @ pb.bone.matrix_local.to_3x3() @ Vector((1, 0, 0))).normalized()
+    posed_x = (arm_eval.matrix_world.to_3x3() @ arm_eval.pose.bones[bone_name].matrix.to_3x3() @ Vector((1, 0, 0))).normalized()
+    hinge_axis_audit = {
+        "rest_local_x_world": [round(float(v), 6) for v in rest_x],
+        "posed_local_x_world": [round(float(v), 6) for v in posed_x],
+        "rest_axis_alignment_with_world_x": round(abs(float(rest_x.dot(Vector((1, 0, 0))))), 6),
+        "posed_axis_alignment_with_world_x": round(abs(float(posed_x.dot(Vector((1, 0, 0))))), 6)
+    }
     calf = arm_eval.data.bones[bone_name]
     knee = arm_eval.matrix_world @ calf.head_local
     ankle = arm_eval.matrix_world @ calf.tail_local
@@ -140,6 +148,7 @@ def render_knee(side, angle):
         if nx * side_sign > 0.025 and 0.12 <= nz < 0.40:
             knee_roi.add(vertex.index)
     edge_changes = []
+    edge_records = []
     for edge in mesh.data.edges:
         a, b = edge.vertices
         if a not in knee_roi and b not in knee_roi:
@@ -147,8 +156,65 @@ def render_knee(side, angle):
         rest_length = (world_neutral[a] - world_neutral[b]).length
         posed_length = (posed[a] - posed[b]).length
         if rest_length > 1e-9:
-            edge_changes.append(abs(posed_length / rest_length - 1.0))
+            change = abs(posed_length / rest_length - 1.0)
+            edge_changes.append(change)
+            midpoint_nz = (((world_neutral[a].z + world_neutral[b].z) * 0.5) - min_z) / height
+            edge_records.append({
+                "vertices": [a, b],
+                "change": change,
+                "rest_length": rest_length,
+                "posed_length": posed_length,
+                "midpoint_nz": midpoint_nz
+            })
     edge_changes.sort()
+
+    def strain_summary(records):
+        values = sorted(item["change"] for item in records)
+        if not values:
+            return {"tested_edges": 0, "p95": 0.0, "max": 0.0, "over_5_percent": 0, "over_10_percent": 0}
+        return {
+            "tested_edges": len(values),
+            "p95": round(values[min(len(values)-1, int((len(values)-1)*0.95))], 6),
+            "max": round(values[-1], 6),
+            "over_5_percent": sum(value > 0.05 for value in values),
+            "over_10_percent": sum(value > 0.10 for value in values)
+        }
+
+    height_bands = {
+        "lower_knee_transition": (0.12, 0.20),
+        "knee_core": (0.20, 0.32),
+        "upper_knee_transition": (0.32, 0.40)
+    }
+    edge_strain_by_height_band = {
+        name: strain_summary([item for item in edge_records if low <= item["midpoint_nz"] < high])
+        for name, (low, high) in height_bands.items()
+    }
+
+    group_names = {group.index: group.name for group in mesh.vertex_groups}
+    def relevant_weights(vertex_index):
+        weights = {}
+        for assignment in mesh.data.vertices[vertex_index].groups:
+            name = group_names.get(assignment.group, "")
+            if any(token in name for token in ("_Thigh", "_Calf", "_Foot", "_Pelvis")):
+                weights[name] = round(float(assignment.weight), 5)
+        return weights
+
+    worst_edges = []
+    for item in sorted(edge_records, key=lambda record: record["change"], reverse=True)[:20]:
+        a, b = item["vertices"]
+        worst_edges.append({
+            "vertices": [a, b],
+            "relative_change": round(item["change"], 6),
+            "rest_length": round(item["rest_length"], 7),
+            "posed_length": round(item["posed_length"], 7),
+            "midpoint_nz": round(item["midpoint_nz"], 6),
+            "a_rest": [round(float(v), 6) for v in world_neutral[a]],
+            "b_rest": [round(float(v), 6) for v in world_neutral[b]],
+            "a_posed": [round(float(v), 6) for v in posed[a]],
+            "b_posed": [round(float(v), 6) for v in posed[b]],
+            "a_weights": relevant_weights(a),
+            "b_weights": relevant_weights(b)
+        })
     edge_p95 = edge_changes[min(len(edge_changes)-1, int((len(edge_changes)-1)*0.95))] if edge_changes else 1.0
     edge_max = max(edge_changes) if edge_changes else 1.0
     edges_over_5 = sum(value > 0.05 for value in edge_changes)
@@ -159,6 +225,9 @@ def render_knee(side, angle):
         "angle_degrees": angle,
         "signed_local_x_degrees": signed_angle,
         "bone_matrix_delta": round(bone_matrix_delta, 6),
+        "hinge_axis_audit": hinge_axis_audit,
+        "edge_strain_by_height_band": edge_strain_by_height_band,
+        "worst_edges": worst_edges,
         "finite_coordinates": finite,
         "vertices": len(posed),
         "vertices_moved": moved,
