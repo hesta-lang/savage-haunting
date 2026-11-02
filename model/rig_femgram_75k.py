@@ -188,7 +188,15 @@ for v in mesh.data.vertices:
  leg_bones=[side+"_Thigh",side+"_Calf",side+"_Foot"]
  leg_distance=min(distseg(xw,*segmap[n]) for n in leg_bones)
  proximity=1.0-smoothstep(.115,.205,leg_distance)
- leg_mask=max(0.0,min(1.0,max(lateral*vertical,knee_core,proximity*vertical)))
+ # Explicit foot island: the lowest exposed foot surface must not retain
+ # Pelvis influence. A tiny pelvis remainder makes adjacent foot vertices
+ # follow different transforms when the calf/foot chain rotates, producing
+ # the extreme edge stretch found in vertices 67549/67626 and 65656/65485.
+ # Keep this envelope side-specific and narrow enough to exclude the torso.
+ foot_lateral=smoothstep(.015,.032,ax)*(1.0-smoothstep(.185,.225,ax))
+ foot_vertical=1.0-smoothstep(.040,.095,nz)
+ foot_core=max(0.0,min(1.0,foot_lateral*foot_vertical))
+ leg_mask=max(0.0,min(1.0,max(lateral*vertical,knee_core,proximity*vertical,foot_core)))
  
  if leg_mask > 0.001:
   # Stable anatomical partition: distance falloff must not overpower the
@@ -207,6 +215,10 @@ for v in mesh.data.vertices:
   # Pelvis influence is allowed only outside the exposed leg mask. In the
   # knee core leg_mask is 1, so every knee vertex is attached to the leg chain.
   pelvis_weight=1.0-leg_mask
+  # In the foot core, hard-zero Pelvis instead of allowing a residual blend.
+  # The lower-limb prior is normalized below, so the foot remains fully weighted.
+  if foot_core >= 0.995:
+   pelvis_weight=0.0
   if pelvis_weight > 1e-12:
    groups["Pelvis"].add([v.index],pelvis_weight,"REPLACE")
   continue
@@ -285,7 +297,8 @@ for v in mesh.data.vertices:
 # Smooth the Calf-to-Foot handoff on the connected ankle surface.
 # Work on the normalized Calf/Foot share only; preserve each vertex's total
 # lower-limb influence and leave Thigh/Pelvis and the source geometry untouched.
-ankle_transition_smoothing = {"left": [], "right": [], "iterations": 4, "factor": 0.35}
+ankle_transition_smoothing = {"left": [], "right": [], "iterations": 4, "factor": 0.30,
+                               "normalized_height_band": [0.045, 0.135]}
 for side_name, sign in (("L", 1), ("R", -1)):
     calf_name = "ValveBiped.Bip01_" + side_name + "_Calf"
     foot_name = "ValveBiped.Bip01_" + side_name + "_Foot"
@@ -294,7 +307,7 @@ for side_name, sign in (("L", 1), ("R", -1)):
         world = mesh.matrix_world @ vtx.co
         nx = (world.x - cx) / w
         nz = (world.z - lo[2]) / h
-        if nx * sign > 0.025 and 0.018 <= nz <= 0.135:
+        if nx * sign > 0.025 and 0.045 <= nz <= 0.135:
             weights = {group_index_to_name[g.group]: g.weight for g in vtx.groups}
             if weights.get(calf_name, 0.0) + weights.get(foot_name, 0.0) > 0.50:
                 eligible.add(vtx.index)
