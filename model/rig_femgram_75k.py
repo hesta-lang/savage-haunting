@@ -1,4 +1,4 @@
-import bpy, os, json
+import bpy, os, json, math
 from mathutils import Vector
 
 src=os.environ["SOURCE_FBX"]; out=os.environ.get("OUTPUT_DIR","dist/rigged")
@@ -90,6 +90,37 @@ for side_name in ("L", "R"):
   bone.use_deform = True
   bone.inherit_scale = "NONE"
   bone.use_inherit_rotation = True
+# Authoring-time anatomical rotation limits for the lower limbs.
+# The knee hinge direction is mirrored in this rig's local X convention:
+# left flexion is negative X; right flexion is positive X.
+# Blender constraints are animator controls; they are not assumed to survive
+# FBX export or to be enforced by the Source engine at runtime.
+rotation_limit_specs = {
+ "Thigh": {"x": (-105.0, 105.0), "y": (-35.0, 35.0), "z": (-35.0, 35.0)},
+ "Calf": {"y": (-8.0, 8.0), "z": (-8.0, 8.0)},
+ "Foot": {"y": (-20.0, 20.0), "z": (-25.0, 25.0)}
+}
+for side_name in ("L", "R"):
+ for part in ("Thigh", "Calf", "Foot"):
+  bone_name = "ValveBiped.Bip01_" + side_name + "_" + part
+  pose_bone = arm.pose.bones[bone_name]
+  pose_bone.rotation_mode = "XYZ"
+  constraint = pose_bone.constraints.new("LIMIT_ROTATION")
+  constraint.name = "Femgram anatomical limits"
+  constraint.owner_space = "LOCAL"
+  constraint.use_transform_limit = True
+  specs = dict(rotation_limit_specs[part])
+  if part == "Calf":
+   specs["x"] = (-150.0, 5.0) if side_name == "L" else (-5.0, 150.0)
+  elif part == "Foot":
+   specs["x"] = (-45.0, 45.0)
+  for axis, (minimum, maximum) in specs.items():
+   low = math.radians(minimum)
+   high = math.radians(maximum)
+   setattr(constraint, "use_limit_" + axis.lower(), True)
+   setattr(constraint, "min_" + axis.lower(), low)
+   setattr(constraint, "max_" + axis.lower(), high)
+
 # Connected joints must share exact endpoints.
 for side_name in ("L", "R"):
  for parent_part, child_part in (("Thigh", "Calf"), ("Calf", "Foot")):
