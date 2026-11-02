@@ -197,7 +197,10 @@ for v in mesh.data.vertices:
  foot_vertical=1.0-smoothstep(.040,.095,nz)
  foot_core=max(0.0,min(1.0,foot_lateral*foot_vertical))
  leg_mask=max(0.0,min(1.0,max(lateral*vertical,knee_core,proximity*vertical,foot_core)))
- if foot_core >= 0.995:
+ # The previous 0.995 cutoff missed edge vertices with a small but harmful
+ # Pelvis remainder (for example, 7.1% Pelvis beside 100% Foot). Treat the
+ # lower-foot island as fully leg-driven once its anatomical mask is strong.
+ if foot_core >= 0.90:
   leg_mask=1.0
  
  if leg_mask > 0.001:
@@ -219,7 +222,7 @@ for v in mesh.data.vertices:
   pelvis_weight=1.0-leg_mask
   # In the foot core, hard-zero Pelvis instead of allowing a residual blend.
   # The lower-limb prior is normalized below, so the foot remains fully weighted.
-  if foot_core >= 0.995:
+  if foot_core >= 0.90:
    pelvis_weight=0.0
   if pelvis_weight > 1e-12:
    groups["Pelvis"].add([v.index],pelvis_weight,"REPLACE")
