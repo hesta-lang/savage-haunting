@@ -66,6 +66,13 @@ for s,sgn in (("L",1),("R",-1)):
  for i,off in enumerate((-.018,-.009,0,.009,.018)):
   n=s+"_Finger"+str(i); a=p(sgn*.455,.69,off); b=p(sgn*.48,.69,off); c=p(sgn*.50,.69,off)
   add(n,a,b,hand); add(n+"_1",b,c,n,True); add(n+"_2",c,p(sgn*.51,.69,off),n+"_1",True)
+# Give both leg chains an explicit, mirrored-consistent local frame.
+# Aligning local Z toward model depth makes the knee bend axis predictable
+# (local X) for both thighs and calves. Apply the same frame to each foot.
+for side_name in ("L", "R"):
+ for part in ("Thigh", "Calf", "Foot"):
+  bone=eb[side_name+"_"+part]
+  bone.align_roll(Vector((0.0, 1.0, 0.0)))
 bpy.ops.object.mode_set(mode="OBJECT"); arm.show_in_front=True
 # Controlled anatomical weights: avoid Blender heat weights bleeding across limbs.
 # The model is a proportion-based T-pose; use region + side filtering and at most
