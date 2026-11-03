@@ -36,6 +36,7 @@ for side_name, sign in (("L",1),("R",-1)):
 # local pitch rotation shear the entire sole. Restrict the cross-section to
 # the anatomical foot body above the sole, then use component-wise medians.
 foot_targets={}
+toe_marker_names={}
 for side_name, sign in (("L",1),("R",-1)):
     foot_points=[q for q in vs
                  if ((q.x-cx)/w)*sign > 0.025
@@ -112,6 +113,9 @@ for s,sgn in (("L",1),("R",-1)):
  # Foot tail in FBX; the marker itself is ignored by skinning.
  add(foot,ankle_point,toe_tail_local,calf,True)
  toe_marker = ad.edit_bones.new("ValveBiped.Bip01_" + s + "_Foot_End")
+ # Blender may normalize or suffix an edit-bone name; retain the actual name
+ # assigned by Blender so the post-edit-mode lookup never assumes it.
+ toe_marker_names[s] = toe_marker.name
  toe_marker.head = toe_tail_local
  toe_direction = (toe_tail_local - ankle_point)
  if toe_direction.length < 1e-6:
@@ -195,7 +199,8 @@ for side_name in ("L", "R"):
  ankle_gap = (foot_bone.head_local-calf_bone.tail_local).length
  if ankle_gap > 1e-5:
   raise RuntimeError("Foot head is not aligned with ankle: " + side_name + " gap=" + str(ankle_gap))
- marker = ad.bones.get("ValveBiped.Bip01_" + side_name + "_Foot_End")
+ marker_name = toe_marker_names.get(side_name)
+ marker = ad.bones.get(marker_name) if marker_name else None
  if not marker or marker.use_deform:
   raise RuntimeError("Missing non-deforming FBX Foot endpoint marker: " + side_name)
  marker.use_deform = False
