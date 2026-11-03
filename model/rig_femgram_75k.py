@@ -168,13 +168,21 @@ for side_name in ("L", "R"):
    setattr(constraint, "min_" + axis.lower(), low)
    setattr(constraint, "max_" + axis.lower(), high)
 
-# Connected joints must share exact endpoints.
+# The knee joint remains a Blender-connected joint. The terminal Foot is
+# intentionally an unconnected child to preserve its independently authored
+# toe endpoint through FBX export; its head must still coincide exactly with
+# the Calf tail, so there is no visible or skeletal gap at the ankle.
 for side_name in ("L", "R"):
- for parent_part, child_part in (("Thigh", "Calf"), ("Calf", "Foot")):
-  parent_bone = ad.bones["ValveBiped.Bip01_" + side_name + "_" + parent_part]
-  child_bone = ad.bones["ValveBiped.Bip01_" + side_name + "_" + child_part]
-  if not child_bone.use_connect or (child_bone.head_local-parent_bone.tail_local).length > 1e-5:
-   raise RuntimeError("Disconnected lower-limb joint: " + side_name + " " + child_part)
+ thigh_bone = ad.bones["ValveBiped.Bip01_" + side_name + "_Thigh"]
+ calf_bone = ad.bones["ValveBiped.Bip01_" + side_name + "_Calf"]
+ foot_bone = ad.bones["ValveBiped.Bip01_" + side_name + "_Foot"]
+ if not calf_bone.use_connect or (calf_bone.head_local-thigh_bone.tail_local).length > 1e-5:
+  raise RuntimeError("Disconnected knee joint: " + side_name + " Calf")
+ ankle_gap = (foot_bone.head_local-calf_bone.tail_local).length
+ if ankle_gap > 1e-5:
+  raise RuntimeError("Foot head is not aligned with ankle: " + side_name + " gap=" + str(ankle_gap))
+ if foot_bone.use_connect:
+  raise RuntimeError("Foot must be an unconnected child: " + side_name)
 # Controlled anatomical weights: avoid Blender heat weights bleeding across limbs.
 # The model is a proportion-based T-pose; use region + side filtering and at most
 # three nearby bones so opposite limbs and fingers cannot steal influence.
