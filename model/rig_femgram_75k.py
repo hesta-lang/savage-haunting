@@ -98,12 +98,13 @@ for s,sgn in (("L",1),("R",-1)):
  # axis then follows the measured ankle-to-toe direction, preventing the
  # previous ~10 cm pivot offset from shearing the ankle during foot rotation.
  target=foot_targets[s]
- # The FBX export/import round-trip expands an unconnected terminal Foot
- # tail vector by approximately 4x in the imported armature. Author one
- # quarter of the measured ankle-to-toe vector so the imported tail lands
- # on the actual toe surface. The ankle head remains unchanged.
+ # Round-trip measurements from the imported FBX show that the terminal
+ # Foot tail vector is doubled relative to the authored source vector.
+ # Author one eighth of the measured ankle-to-toe vector: after the FBX
+ # conversion this places the imported tail at the measured toe surface.
+ # Keep the ankle head fixed and preserve the unconnected child relationship.
  toe_world = Vector(target["toe_world"])
- fbx_safe_tail_world = ankle_point.lerp(toe_world, 0.25)
+ fbx_safe_tail_world = ankle_point.lerp(toe_world, 0.125)
  toe_tail_local = world_to_arm @ fbx_safe_tail_world
  add(foot,ankle_point,toe_tail_local,calf,False)
  clav=s+"_Clavicle"; upper=s+"_UpperArm"; fore=s+"_Forearm"; hand=s+"_Hand"
@@ -729,7 +730,7 @@ for side_name in ("L", "R"):
     ankle = joint_targets[side_name]["ankle"]
     actual_head = arm.matrix_world @ bone.head_local
     actual = arm.matrix_world @ bone.tail_local
-    expected_source_tail = ankle.lerp(target, 0.25)
+    expected_source_tail = ankle.lerp(target, 0.125)
     delta = actual-expected_source_tail
     head_delta = actual_head-ankle
     foot_bone_endpoint_audit[side_name] = {
@@ -741,7 +742,7 @@ for side_name in ("L", "R"):
         "actual_source_tail_world": [float(x) for x in actual],
         "source_tail_offset_distance": float(delta.length),
         "connected": bool(bone.use_connect),
-        "fbx_roundtrip_compensation": "quarter ankle-to-toe vector; FBX round-trip expands terminal tail vector approximately fourfold"
+        "fbx_roundtrip_compensation": "one-eighth ankle-to-toe vector; FBX round-trip doubles terminal tail vector"
     }
     if head_delta.length > 0.001:
         raise RuntimeError("Foot bone head is not at ankle: " +
