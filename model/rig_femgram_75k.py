@@ -98,12 +98,13 @@ for s,sgn in (("L",1),("R",-1)):
  # axis then follows the measured ankle-to-toe direction, preventing the
  # previous ~10 cm pivot offset from shearing the ankle during foot rotation.
  target=foot_targets[s]
- # Keep the Foot head exactly at the measured ankle, but do not use
- # Blender's connected-bone behavior for this terminal segment. The FBX
- # round-trip previously altered the connected Foot tail; an unconnected
- # child preserves the authored ankle-to-toe endpoint without changing mesh
- # geometry or vertex weights.
- toe_tail_local = world_to_arm @ Vector(target["toe_world"])
+ # The FBX exporter doubles the unconnected terminal Foot tail vector
+ # on round-trip for this source rig (confirmed by the imported audit:
+ # 0.359784 m versus the authored 0.179892 m). Author half the ankle-to-toe
+ # vector so the imported endpoint lands on the measured toe surface.
+ toe_world = Vector(target["toe_world"])
+ fbx_safe_tail_world = ankle_point.lerp(toe_world, 0.5)
+ toe_tail_local = world_to_arm @ fbx_safe_tail_world
  add(foot,ankle_point,toe_tail_local,calf,False)
  clav=s+"_Clavicle"; upper=s+"_UpperArm"; fore=s+"_Forearm"; hand=s+"_Hand"
  add(clav,p(sgn*.035,.70),p(sgn*.145,.70),"Spine2")
@@ -720,17 +721,19 @@ for side_name in ("L", "R"):
     ankle = joint_targets[side_name]["ankle"]
     actual_head = arm.matrix_world @ bone.head_local
     actual = arm.matrix_world @ bone.tail_local
-    delta = actual-target
+    expected_source_tail = ankle.lerp(target, 0.5)
+    delta = actual-expected_source_tail
     head_delta = actual_head-ankle
     foot_bone_endpoint_audit[side_name] = {
         "toe_surface_world": [float(x) for x in target],
         "expected_source_head_world": [float(x) for x in ankle],
         "actual_source_head_world": [float(x) for x in actual_head],
         "source_head_offset_distance": float(head_delta.length),
+        "expected_source_tail_world": [float(x) for x in expected_source_tail],
         "actual_source_tail_world": [float(x) for x in actual],
         "source_tail_offset_distance": float(delta.length),
         "connected": bool(bone.use_connect),
-        "fbx_roundtrip_compensation": "disabled; unconnected Foot child with full ankle-to-toe endpoint"
+        "fbx_roundtrip_compensation": "half ankle-to-toe vector; FBX import doubles terminal tail vector"
     }
     if head_delta.length > 0.001:
         raise RuntimeError("Foot bone head is not at ankle: " +
