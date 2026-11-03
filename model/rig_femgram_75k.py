@@ -98,12 +98,13 @@ for s,sgn in (("L",1),("R",-1)):
  # axis then follows the measured ankle-to-toe direction, preventing the
  # previous ~10 cm pivot offset from shearing the ankle during foot rotation.
  target=foot_targets[s]
- # Blender FBX round-trip doubles the terminal Foot-bone offset on this source rig.
- # Store half the ankle-to-toe vector so the imported ValveBiped Foot endpoint
- # lands on the measured toe surface without moving any mesh vertex.
+ # Keep the Foot head exactly at the measured ankle, but do not use
+ # Blender's connected-bone behavior for this terminal segment. The FBX
+ # round-trip previously altered the connected Foot tail; an unconnected
+ # child preserves the authored ankle-to-toe endpoint without changing mesh
+ # geometry or vertex weights.
  toe_tail_local = world_to_arm @ Vector(target["toe_world"])
- fbx_compensated_tail = ankle_point.lerp(toe_tail_local, 0.5)
- add(foot,ankle_point,fbx_compensated_tail,calf,True)
+ add(foot,ankle_point,toe_tail_local,calf,False)
  clav=s+"_Clavicle"; upper=s+"_UpperArm"; fore=s+"_Forearm"; hand=s+"_Hand"
  add(clav,p(sgn*.035,.70),p(sgn*.145,.70),"Spine2")
  add(upper,p(sgn*.145,.70),p(sgn*.315,.695),clav,True)
@@ -709,19 +710,28 @@ for side_name in ("L", "R"):
     bone = ad.bones.get("ValveBiped.Bip01_" + side_name + "_Foot")
     target = Vector(foot_targets[side_name]["toe_world"])
     ankle = joint_targets[side_name]["ankle"]
-    expected_compensated_tail = ankle.lerp(target, 0.5)
+    actual_head = arm.matrix_world @ bone.head_local
     actual = arm.matrix_world @ bone.tail_local
-    delta = actual-expected_compensated_tail
+    delta = actual-target
+    head_delta = actual_head-ankle
     foot_bone_endpoint_audit[side_name] = {
         "toe_surface_world": [float(x) for x in target],
-        "fbx_compensated_source_tail_world": [float(x) for x in expected_compensated_tail],
+        "expected_source_head_world": [float(x) for x in ankle],
+        "actual_source_head_world": [float(x) for x in actual_head],
+        "source_head_offset_distance": float(head_delta.length),
         "actual_source_tail_world": [float(x) for x in actual],
-        "source_offset_distance": float(delta.length),
-        "fbx_roundtrip_compensation": "half-length source tail; expected imported endpoint at toe surface"
+        "source_tail_offset_distance": float(delta.length),
+        "connected": bool(bone.use_connect),
+        "fbx_roundtrip_compensation": "disabled; unconnected Foot child with full ankle-to-toe endpoint"
     }
+    if head_delta.length > 0.001:
+        raise RuntimeError("Foot bone head is not at ankle: " +
+                           side_name + " offset=" + str(head_delta.length))
     if delta.length > 0.005:
-        raise RuntimeError("Foot bone FBX compensation mismatch: " +
+        raise RuntimeError("Foot bone tail is not at toe surface: " +
                            side_name + " offset=" + str(delta.length))
+    if bone.use_connect:
+        raise RuntimeError("Foot bone must remain unconnected: " + side_name)
 
 bpy.ops.object.select_all(action="DESELECT"); mesh.select_set(True); arm.select_set(True); bpy.context.view_layer.objects.active=arm
 dest=os.path.join(out,"Femgram-75K-ValveBiped-Rigged.fbx")
