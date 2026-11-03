@@ -106,7 +106,19 @@ for s,sgn in (("L",1),("R",-1)):
  toe_world = Vector(target["toe_world"])
  fbx_safe_tail_world = ankle_point.lerp(toe_world, 0.125)
  toe_tail_local = world_to_arm @ fbx_safe_tail_world
- add(foot,ankle_point,toe_tail_local,calf,False)
+ # FBX stores terminal bone endpoints unreliably when a bone has no child:
+ # on round-trip Blender may reconstruct Foot using the previous segment length.
+ # Add a non-deforming toe marker child. Its head explicitly encodes the desired
+ # Foot tail in FBX; the marker itself is ignored by skinning.
+ add(foot,ankle_point,toe_tail_local,calf,True)
+ toe_marker = ad.edit_bones.new("ValveBiped.Bip01_" + s + "_Foot_End")
+ toe_marker.head = toe_tail_local
+ toe_direction = (toe_tail_local - ankle_point)
+ if toe_direction.length < 1e-6:
+  raise RuntimeError("Invalid Foot endpoint direction: " + s)
+ toe_marker.tail = toe_tail_local + toe_direction.normalized() * max(0.005, h * 0.005)
+ toe_marker.parent = eb[foot]
+ toe_marker.use_connect = True
  clav=s+"_Clavicle"; upper=s+"_UpperArm"; fore=s+"_Forearm"; hand=s+"_Hand"
  add(clav,p(sgn*.035,.70),p(sgn*.145,.70),"Spine2")
  add(upper,p(sgn*.145,.70),p(sgn*.315,.695),clav,True)
@@ -183,8 +195,14 @@ for side_name in ("L", "R"):
  ankle_gap = (foot_bone.head_local-calf_bone.tail_local).length
  if ankle_gap > 1e-5:
   raise RuntimeError("Foot head is not aligned with ankle: " + side_name + " gap=" + str(ankle_gap))
- if foot_bone.use_connect:
-  raise RuntimeError("Foot must be an unconnected child: " + side_name)
+ marker = ad.bones.get("ValveBiped.Bip01_" + side_name + "_Foot_End")
+ if not marker or marker.use_deform:
+  raise RuntimeError("Missing non-deforming FBX Foot endpoint marker: " + side_name)
+ marker.use_deform = False
+ if not foot_bone.use_connect or not marker.use_connect:
+  raise RuntimeError("Foot endpoint marker chain must be connected for FBX export: " + side_name)
+ if (foot_bone.tail_local - marker.head_local).length > 1e-5:
+  raise RuntimeError("Foot tail does not meet toe endpoint marker: " + side_name)
 # Controlled anatomical weights: avoid Blender heat weights bleeding across limbs.
 # The model is a proportion-based T-pose; use region + side filtering and at most
 # three nearby bones so opposite limbs and fingers cannot steal influence.
