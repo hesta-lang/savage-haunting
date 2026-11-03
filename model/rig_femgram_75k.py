@@ -98,12 +98,12 @@ for s,sgn in (("L",1),("R",-1)):
  # axis then follows the measured ankle-to-toe direction, preventing the
  # previous ~10 cm pivot offset from shearing the ankle during foot rotation.
  target=foot_targets[s]
- # The FBX exporter doubles the unconnected terminal Foot tail vector
- # on round-trip for this source rig (confirmed by the imported audit:
- # 0.359784 m versus the authored 0.179892 m). Author half the ankle-to-toe
- # vector so the imported endpoint lands on the measured toe surface.
+ # The FBX export/import round-trip expands an unconnected terminal Foot
+ # tail vector by approximately 4x in the imported armature. Author one
+ # quarter of the measured ankle-to-toe vector so the imported tail lands
+ # on the actual toe surface. The ankle head remains unchanged.
  toe_world = Vector(target["toe_world"])
- fbx_safe_tail_world = ankle_point.lerp(toe_world, 0.5)
+ fbx_safe_tail_world = ankle_point.lerp(toe_world, 0.25)
  toe_tail_local = world_to_arm @ fbx_safe_tail_world
  add(foot,ankle_point,toe_tail_local,calf,False)
  clav=s+"_Clavicle"; upper=s+"_UpperArm"; fore=s+"_Forearm"; hand=s+"_Hand"
@@ -262,7 +262,11 @@ for v in mesh.data.vertices:
  if leg_mask > 0.001:
   # Stable anatomical partition: distance falloff must not overpower the
   # knee/ankle blend or pull the foot back onto the calf.
-  knee_blend=smoothstep(.12,.40,nz)
+  # Keep the Thigh/Calf weight transition tightly centered on the measured
+  # anatomical knee. The previous 28%-of-body blend spread bending influence
+  # far into both bones and produced severe edge stretch at 90 degrees.
+  knee_nz=(joint_targets[side]["knee"].z-lo[2])/h
+  knee_blend=smoothstep(knee_nz-0.030,knee_nz+0.030,nz)
   foot_blend=1.0-smoothstep(.025,.145,nz)
   priors={
    side+"_Thigh": knee_blend,
@@ -362,7 +366,8 @@ for v in mesh.data.vertices:
 # preserve total lower-limb influence and never reintroduce Pelvis or Foot weight.
 knee_transition_smoothing = {
     "left": [], "right": [], "iterations": 12, "factor": 0.25,
-    "normalized_height_band": [0.12, 0.40],
+    "normalized_height_band": "measured knee center +/- 0.065",
+    "normalized_height_radius": 0.065,
     "preserves_total_leg_weight": True,
     "disabled_reason": None,
     "pelvis_weight_added": False,
@@ -377,7 +382,8 @@ for side_name, sign in (("L", 1), ("R", -1)):
         world = mesh.matrix_world @ vtx.co
         nx = (world.x - cx) / w
         nz = (world.z - lo[2]) / h
-        if nx * sign <= 0.025 or not (0.12 <= nz <= 0.40):
+        knee_nz = (joint_targets[side_name]["knee"].z - lo[2]) / h
+        if nx * sign <= 0.025 or not (knee_nz - knee_transition_smoothing["normalized_height_radius"] <= nz <= knee_nz + knee_transition_smoothing["normalized_height_radius"]):
             continue
         weights = {group_index_to_name[g.group]: g.weight for g in vtx.groups}
         leg_total = weights.get(thigh_name, 0.0) + weights.get(calf_name, 0.0)
@@ -652,7 +658,8 @@ for v in mesh.data.vertices:
 # vertices remain untouched. Remove residual Pelvis/Foot and smooth the
 # normalized Thigh/Calf share over the actual connected knee surface.
 final_knee_weight_cleanup = {"left": 0, "right": 0, "iterations": 8, "factor": 0.22,
-                             "normalized_height_band": [0.12, 0.40],
+                             "normalized_height_band": "measured knee center +/- 0.065",
+                             "normalized_height_radius": 0.065,
                              "minimum_existing_leg_weight": 0.80,
                              "smoothing_disabled": False}
 for side_name, sign in (("L", 1), ("R", -1)):
@@ -665,7 +672,8 @@ for side_name, sign in (("L", 1), ("R", -1)):
         world = mesh.matrix_world @ vtx.co
         nx = (world.x-cx)/w
         nz = (world.z-lo[2])/h
-        if nx*sign <= 0.025 or not (0.12 <= nz <= 0.40):
+        knee_nz = (joint_targets[side_name]["knee"].z - lo[2]) / h
+        if nx*sign <= 0.025 or not (knee_nz-final_knee_weight_cleanup["normalized_height_radius"] <= nz <= knee_nz+final_knee_weight_cleanup["normalized_height_radius"]):
             continue
         own = {group_index_to_name[g.group]: g.weight for g in vtx.groups}
         thigh_w = own.get(thigh_name, 0.0)
@@ -721,7 +729,7 @@ for side_name in ("L", "R"):
     ankle = joint_targets[side_name]["ankle"]
     actual_head = arm.matrix_world @ bone.head_local
     actual = arm.matrix_world @ bone.tail_local
-    expected_source_tail = ankle.lerp(target, 0.5)
+    expected_source_tail = ankle.lerp(target, 0.25)
     delta = actual-expected_source_tail
     head_delta = actual_head-ankle
     foot_bone_endpoint_audit[side_name] = {
@@ -733,7 +741,7 @@ for side_name in ("L", "R"):
         "actual_source_tail_world": [float(x) for x in actual],
         "source_tail_offset_distance": float(delta.length),
         "connected": bool(bone.use_connect),
-        "fbx_roundtrip_compensation": "half ankle-to-toe vector; FBX import doubles terminal tail vector"
+        "fbx_roundtrip_compensation": "quarter ankle-to-toe vector; FBX round-trip expands terminal tail vector approximately fourfold"
     }
     if head_delta.length > 0.001:
         raise RuntimeError("Foot bone head is not at ankle: " +
